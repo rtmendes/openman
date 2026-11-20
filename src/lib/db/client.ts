@@ -9,24 +9,35 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const g = globalThis as typeof globalThis & { __omDb?: { client: SupabaseClient; fingerprint: string } };
+// Match the SDK's default ungenerated database type across deployment schemas.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DatabaseClient = SupabaseClient<any, "public", string>;
+const g = globalThis as typeof globalThis & { __omDb?: { client: DatabaseClient; fingerprint: string } };
 
 /** True when the three settings the client needs are present. */
 export function dbConfigured(): boolean {
-  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY && process.env.APP_DB_SECRET);
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    (process.env.APP_DB_API_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) &&
+    process.env.APP_DB_SECRET &&
+    (process.env.APP_DB_SCHEMA !== "mahara" || process.env.APP_DB_ACCESS_TOKEN)
+  );
 }
 
-export function db(): SupabaseClient {
+export function db(): DatabaseClient {
   if (typeof window !== "undefined") throw new Error("db() is server-only.");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const key = process.env.APP_DB_API_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const secret = process.env.APP_DB_SECRET;
-  if (!url || !key || !secret) throw new DbError("The database is not configured.", "config");
-  const fingerprint = `${url}|${key}|${secret.length}`;
+  const schema = process.env.APP_DB_SCHEMA || "public";
+  const token = process.env.APP_DB_ACCESS_TOKEN;
+  if (!url || !key || !secret || (schema === "mahara" && !token)) throw new DbError("The database is not configured.", "config");
+  const fingerprint = `${url}|${key}|${secret.length}|${schema}|${token?.length ?? 0}`;
   if (g.__omDb?.fingerprint === fingerprint) return g.__omDb.client;
   const client = createClient(url, key, {
+    db: { schema },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: { headers: { "x-om-secret": secret } },
+    global: { headers: { "x-om-secret": secret, ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
   });
   g.__omDb = { client, fingerprint };
   return client;
