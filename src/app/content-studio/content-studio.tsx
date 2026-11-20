@@ -152,6 +152,12 @@ export function ContentStudio({ canLoadBrand = false }: { canLoadBrand?: boolean
               </button>
             </div>
             {brandError && <p role="alert">{brandError}</p>}
+            <details className="content-studio-runState">
+              <summary>Preview Hostage Talks, 2 A.M.</summary>
+              <p>30-second vertical animation · Narration and captions · Draft for review</p>
+              <video controls playsInline preload="none" width={320} style={{ maxWidth: "100%", display: "block" }}
+                aria-label="Hostage Talks, 2 A.M. animated draft" src="/api/admin/second-spring/video" />
+            </details>
             {brief.brandContext && <div className="content-studio-runState">
               <div className="content-studio-runActions">
                 <button type="button" onClick={() => setShowScript((visible) => !visible)} aria-expanded={showScript}>{showScript ? "Hide" : "Preview"} 30-second sample</button>
