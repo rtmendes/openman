@@ -2,6 +2,8 @@
 
 Mahara is a personal workspace built from the [OpenMan project](https://github.com/rtmendes/openman).
 
+Open the [Mahara deployment](https://mahara-rosy.vercel.app). Workspace sign-in, saved imports, and AI tasks require the database and Orgo setup below.
+
 See the [Product Requirements Document](PRD.md) for scope and acceptance criteria and the [Operations SOP](SOP.md) for deployment, workspace setup, and verification.
 
 ## Use Mahara on your devices
