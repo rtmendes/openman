@@ -120,6 +120,9 @@ export function LandingHero() {
       <h1 className="mb-[20px] text-center font-serif text-[36px] leading-[54px] text-[var(--om-text-1)]">
         Give it a job. Watch it work.
       </h1>
+      <Link href="/content-studio" className="mx-auto mb-5 block w-fit text-sm text-[var(--om-text-accent)] hover:underline">
+        Open Content Studio →
+      </Link>
 
       <div className="mb-[28px] flex flex-col items-center gap-[8px]">
         {session || authDisabled ? (
