@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Im
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { examples, formats, makePrompt, platforms, stages, type Brief } from "./workflow";
-import styles from "./studio.module.css";
+import "./studio.css";
 
 const icons = [Settings2, Search, Image, ListVideo, Film, Smartphone, FileText];
 
@@ -58,16 +58,16 @@ export function ContentStudio() {
   const StageIcon = icons[active];
 
   return (
-    <main className={styles.studio}>
-      <header className={styles.bar}>
-        <h1 className={styles.wordmark}><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
-        <Link href="/" className={styles.back}><ArrowLeft size={15} aria-hidden /> Home</Link>
+    <main className="content-studio-studio">
+      <header className="content-studio-bar">
+        <h1 className="content-studio-wordmark"><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
+        <Link href="/" className="content-studio-back"><ArrowLeft size={15} aria-hidden /> Home</Link>
       </header>
 
-      <div className={styles.workspace}>
-        <nav className={styles.rail} aria-labelledby="workflow-heading">
+      <div className="content-studio-workspace">
+        <nav className="content-studio-rail" aria-labelledby="workflow-heading">
           <h2 id="workflow-heading">Workflow</h2>
-          <ol className={styles.steps}>
+          <ol className="content-studio-steps">
             {stages.map((item, index) => {
               const Icon = icons[index];
               return (
@@ -81,21 +81,21 @@ export function ContentStudio() {
               );
             })}
           </ol>
-          <select className={styles.stepSelect} aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
+          <select className="content-studio-stepSelect" aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
             {stages.map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}
           </select>
         </nav>
 
-        <div className={styles.main}>
-          <section className={styles.topic} aria-labelledby="topic-heading">
-            <div className={styles.heroArt} aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
+        <div className="content-studio-main">
+          <section className="content-studio-topic" aria-labelledby="topic-heading">
+            <div className="content-studio-heroArt" aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
             <h2 id="topic-heading">What are you creating?</h2>
             <label htmlFor="studio-topic">Niche or topic</label>
-            <div className={styles.topicField}>
+            <div className="content-studio-topicField">
               <Hash size={25} aria-hidden />
               <input id="studio-topic" value={brief.topic} onChange={(event) => update("topic", event.target.value)} placeholder="Enter any topic" maxLength={200} required />
             </div>
-            <div className={styles.examples} aria-label="Example topics" role="group">
+            <div className="content-studio-examples" aria-label="Example topics" role="group">
               <span>Try</span>
               {examples.filter((topic) => topic !== brief.topic).map((topic) => (
                 <button key={topic} type="button" onClick={() => update("topic", topic)}>{topic}</button>
@@ -103,50 +103,50 @@ export function ContentStudio() {
             </div>
           </section>
 
-          <div className={styles.editor}>
-            <section className={styles.document} aria-labelledby="output-heading">
-              <div className={styles.documentHead}>
-                <div className={styles.documentLabel}><StageIcon size={17} aria-hidden /> Your brief</div>
+          <div className="content-studio-editor">
+            <section className="content-studio-document" aria-labelledby="output-heading">
+              <div className="content-studio-documentHead">
+                <div className="content-studio-documentLabel"><StageIcon size={17} aria-hidden /> Your brief</div>
                 {ready && (
-                  <div className={styles.tools}>
+                  <div className="content-studio-tools">
                     <button type="button" onClick={copy}><Copy size={15} aria-hidden /> Copy</button>
                     <button type="button" onClick={download}><Download size={15} aria-hidden /> Export</button>
-                    <button type="button" className={styles.primary} onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={15} aria-hidden /> Open in agent</button>
+                    <button type="button" className="content-studio-primary" onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={15} aria-hidden /> Open in agent</button>
                   </div>
                 )}
               </div>
 
-              <div className={styles.paper}>
+              <div className="content-studio-paper">
                 <h2 id="output-heading">{stage.title}</h2>
-                <p className={styles.description}>{stage.description}</p>
+                <p className="content-studio-description">{stage.description}</p>
                 {ready ? (
                   <div aria-label="Generated agent brief">
-                    <ul className={styles.context}>
+                    <ul className="content-studio-context">
                       <li>{brief.topic.trim()}</li>
                       <li>{brief.format}</li>
                       {brief.platforms.map((platform) => <li key={platform}>{platform}</li>)}
                       <li><Globe2 size={13} aria-hidden /> {brief.language.trim()}</li>
                     </ul>
-                    <details className={styles.raw}><summary>Workflow instructions <ChevronDown size={14} aria-hidden /></summary>
-                    <ol className={styles.instructions}>{stage.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
-                    <div className={styles.deliverables}>
+                    <details className="content-studio-raw"><summary>Workflow instructions <ChevronDown size={14} aria-hidden /></summary>
+                    <ol className="content-studio-instructions">{stage.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
+                    <div className="content-studio-deliverables">
                       <FileText size={17} aria-hidden />
                       <div><h3>Expected output</h3><p>{stage.output}</p></div>
                     </div>
-                    <details className={styles.raw}>
+                    <details className="content-studio-raw">
                       <summary>View full prompt <ChevronDown size={14} aria-hidden /></summary>
                       <pre>{prompt}</pre>
                     </details>
                   </div>
-                ) : <p className={styles.empty}>Enter a topic and language, and select a platform to build your brief.</p>}
+                ) : <p className="content-studio-empty">Enter a topic and language, and select a platform to build your brief.</p>}
               </div>
 
-              <p className={styles.feedback} role="status">{feedback}</p>
+              <p className="content-studio-feedback" role="status">{feedback}</p>
             </section>
 
-            <aside className={styles.settings} aria-labelledby="brief-heading">
+            <aside className="content-studio-settings" aria-labelledby="brief-heading">
               <h2 id="brief-heading"><Settings2 size={16} aria-hidden /> Personalize</h2>
-              <div className={styles.fields}>
+              <div className="content-studio-fields">
                 <label>Audience
                   <input value={brief.audience} onChange={(event) => update("audience", event.target.value)} maxLength={300} placeholder="e.g. First-time creators" />
                 </label>
@@ -160,7 +160,7 @@ export function ContentStudio() {
                 </label>
                 <fieldset>
                   <legend>Platforms</legend>
-                  <div className={styles.platforms}>
+                  <div className="content-studio-platforms">
                     {platforms.map((platform) => {
                       const selected = brief.platforms.includes(platform);
                       return (
