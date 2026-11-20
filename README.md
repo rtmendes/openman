@@ -1,4 +1,18 @@
-# OpenMan
+# Mahara
+
+Mahara is a personal workspace built from the [OpenMan project](https://github.com/rtmendes/openman).
+
+Open the [Mahara deployment](https://mahara-rosy.vercel.app). Workspace sign-in, saved imports, and AI tasks require the database and Orgo setup below.
+
+See the [Product Requirements Document](PRD.md) for scope and acceptance criteria and the [Operations SOP](SOP.md) for deployment, workspace setup, and verification.
+
+## Use Mahara on your devices
+
+1. Set up Orgo and Supabase using the quick start below. Deploy the app at one HTTPS URL for access outside your computer.
+2. Sign in with the same Orgo account on each device to access the projects, files, and tasks saved on that deployment.
+3. To install Mahara, use **Install app** in a browser that offers it, or **Add to Home Screen** from Safari's Share menu on iPhone or iPad. Mahara requires an internet connection for your workspace and AI tasks.
+4. In a project, select **Import Manus Markdown** under **Project files**, then choose your exported `.md` or `.markdown` files. Select a filename to read it or use the download button to retrieve the original. Projects accept files up to 2 MB each and hold up to 50 files.
+5. Add **Instructions** to a project to give its Hermes tasks a reusable role and workflow. Start a new task in that project to give Hermes access to the imported files as reference material. Use the mode menu to select the Claude tier. To use your own Anthropic key, save it in Orgo Secrets, refresh Mahara, and select **Your own key** when Orgo reports it is active.
 
 OpenMan is an open-source autonomous AI agent workspace that runs on your own [Orgo](https://www.orgo.ai) cloud
 computer. Give it a job and it plans, browses, runs code and works with files on that computer until the job is done,
@@ -10,8 +24,7 @@ email address and phone number for the agent, and a public API.
 <!-- Screenshot: add docs/images/screenshot.png and uncomment the line below. -->
 <!-- ![OpenMan](docs/images/screenshot.png) -->
 
-> **Status: early.** OpenMan works end to end for its core features, but it is young software. Read
-> [Project status](#project-status) and the [disclaimer](DISCLAIMER.md) before relying on it.
+> **Status: early.** Mahara targets Vercel for HTTPS hosting, Supabase for saved workspace data, and Orgo for agent execution. Production workspace verification requires the dedicated Supabase database and an Orgo account. The [project status](#project-status) below describes the upstream OpenMan baseline.
 
 ## How it works
 

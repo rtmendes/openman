@@ -191,6 +191,12 @@ export async function deleteProjectFile(id: string, fileId: string): Promise<voi
 }
 
 export const projectFileUrl = (id: string, fileId: string) => `/api/projects/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`;
+
+export async function readProjectFileText(id: string, fileId: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(projectFileUrl(id, fileId), { cache: "no-store", signal });
+  if (!response.ok) throw new Error("The file could not be opened. Try downloading it.");
+  return response.text();
+}
 export const projectHref = (id: string) => `/app/project/${encodeURIComponent(id)}`;
 
 /* ---------------------------------------------------------------- sharing */
