@@ -5,6 +5,7 @@ import { db, fail } from "@/lib/db/client";
 import { studioDraft } from "@/lib/db/studio-drafts";
 import { operatorFor } from "@/lib/observability/operator";
 import type { Session } from "@/lib/session";
+import { studioMediaPerProject } from "./media-types";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
@@ -19,7 +20,8 @@ const project = z.object({
     ratio, ratios: z.array(ratio).min(1).max(3).optional(),
     voice: z.object({ style: z.string().max(100), language: z.string().max(80).optional(), rate: z.number().min(0.5).max(2) }).optional(),
     reference: z.string().max(6000), referenceLinks: z.array(z.string().max(2000)).max(15).optional(),
-    media: z.array(z.object({ id: z.string().max(70), name: z.string().max(250), type: z.string().max(100), size: z.number().nonnegative() })).max(25).optional(),
+    media: z.preprocess((value) => Array.isArray(value) ? value.slice(0, studioMediaPerProject) : value,
+      z.array(z.object({ id: z.string().max(70), name: z.string().max(250), type: z.string().max(100), size: z.number().nonnegative() })).optional()),
   }),
 });
 

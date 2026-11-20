@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { studioMediaUrl, uploadStudioMedia } from "@/lib/agent/client";
-import { mediaExtension, studioMediaLimit, studioMediaTypes, studioTextExtension } from "@/lib/studio/media-types";
+import { mediaExtension, studioMediaLimit, studioMediaPerProject, studioMediaTypes, studioTextExtension } from "@/lib/studio/media-types";
 import { voiceDirections, type VideoSpec } from "./production";
 
 const defaultVoice: NonNullable<VideoSpec["voice"]> = { style: "Warm conversational", rate: 1 };
@@ -50,7 +50,7 @@ export function NarrationOptions({ voice, line, onChange }: {
         <option key={voiceURI} value={voiceURI}>{name} · {lang}</option>)}</select></label>
       <label>Narration language<input value={value.language ?? ""} maxLength={60} placeholder="e.g. en-US" onChange={(event) => onChange({ ...value, language: event.target.value })} /></label>
       <label>Pace<select value={value.rate} onChange={(event) => onChange({ ...value, rate: Number(event.target.value) })}>
-        <option value=".85">Unhurried · 0.85×</option><option value="1">Natural · 1×</option><option value="1.1">Brisk · 1.1×</option>
+        <option value="0.85">Unhurried · 0.85×</option><option value="1">Natural · 1×</option><option value="1.1">Brisk · 1.1×</option>
       </select></label>
     </div>
     <div className="content-studio-runActions"><button type="button" onClick={audition}>Preview voice</button>
@@ -74,6 +74,7 @@ export function ReferenceInputs({ spec, cloud, onChange }: {
   const [dragging, setDragging] = useState(false);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const remaining = Math.max(0, studioMediaPerProject - (spec.media?.length ?? 0));
 
   function addLinks(raw: string) {
     const links = raw.split(/[\s\n]+/).flatMap((line) => {
@@ -87,11 +88,13 @@ export function ReferenceInputs({ spec, cloud, onChange }: {
   }
 
   async function addFiles(files: File[]) {
+    if (cloud && !remaining) { setMessage(`This project has its ${studioMediaPerProject} private attachments. Remove a reference to make space.`); return; }
     setUploading(true);
     setMessage("");
     const errors: string[] = [];
     let uploaded = 0;
-    for (const file of files.slice(0, 12)) {
+    const accepted = files.slice(0, cloud ? Math.min(remaining, 12) : 12);
+    for (const file of accepted) {
       const type = mediaExtension(file.name);
       try {
         if (!Object.hasOwn(studioMediaTypes, type) || !file.size || file.size > studioMediaLimit) {
@@ -112,6 +115,7 @@ export function ReferenceInputs({ spec, cloud, onChange }: {
         errors.push(`${file.name}: ${error instanceof Error ? error.message : "upload failed"}`);
       }
     }
+    if (accepted.length < files.length) errors.push(`${files.length - accepted.length} skipped. Add up to 12 files at a time${cloud ? ` and ${studioMediaPerProject} per project` : ""}.`);
     setUploading(false);
     setMessage([uploaded ? `Saved ${uploaded} privately.` : "", ...errors].filter(Boolean).join(" "));
   }
@@ -146,7 +150,7 @@ export function ReferenceInputs({ spec, cloud, onChange }: {
       <label>Drop references here or browse<input type="file" multiple disabled={uploading}
         accept={Object.keys(studioMediaTypes).map((extension) => `.${extension}`).join(",")}
         onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void addFiles(files); }} /></label>
-      <p className="production-hint">Images, video, audio, PDFs, text, CSV, JSON and captions · Up to 50 MB each</p>
+      <p className="production-hint">Images, video, audio, PDFs, text, CSV, JSON and captions · Up to 50 MB each{cloud ? ` · ${remaining} attachment slots available` : ""}</p>
     </div>
     {uploading && <p role="status">Adding references…</p>}
     {message && <p role="status">{message}</p>}
