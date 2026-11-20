@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { orgoAccountView, ORGO_LINKS } from "@/lib/orgo/account-view";
 import { errorResponse, json, readJson } from "@/lib/orgo/http";
 import { adoptComputer, AdoptRefused, ensureHomeComputer, provisionStatus, resetHomeComputer } from "@/lib/provision";
@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const session = await requireSession();
     const status = await provisionStatus(session);
     if (status.outdated && !status.running && !session.dev) {
-      ensureHomeComputer(session, { quiet: true }).catch(() => undefined);
+      const run = ensureHomeComputer(session, { quiet: true });
+      after(() => run.then(() => undefined, () => undefined));
       return json({ ...status, running: true });
     }
     return json(status);
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
       const done = await run;
       return json(done, done.state === "error" ? 502 : 200);
     }
-    run.catch(() => undefined);
+    after(() => run.then(() => undefined, () => undefined));
     return json(await provisionStatus(session), 202);
   } catch (err) {
     return errorResponse(err, req);
