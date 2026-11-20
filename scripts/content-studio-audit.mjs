@@ -120,3 +120,18 @@ assert.equal(isStudioRunOpen("review"), true);
 assert.equal(isStudioRunOpen("blocked"), true);
 assert.equal(isStudioRunOpen("complete"), false);
 console.log("PASS project-specific bulk result application and stale edit protection");
+
+const { productionFiles, productionZip } = require("../src/app/content-studio/production-package.ts");
+const exported = productionFiles([{ spec: { ...run.input.spec, ratios: ["9:16", "16:9", "1:1"] }, plan: finishedPlan, brandContext: "Second Spring" }]);
+assert.deepEqual(JSON.parse(exported["batch.json"]).projects, ["video-01", "video-02", "video-03"]);
+for (const [index, [width, height]] of [[1080, 1920], [1920, 1080], [1080, 1080]].entries()) {
+  const folder = `video-0${index + 1}`;
+  assert.ok(exported[`${folder}/index.html`].includes(`data-width="${width}" data-height="${height}"`));
+  assert.ok(exported[`${folder}/index.html`].includes('class="clip caption top"'));
+  assert.ok(exported[`${folder}/draft-captions.srt`].includes("00:00:04,000 --> 00:00:30,000"));
+}
+const packed = Buffer.from(await productionZip(exported).arrayBuffer());
+assert.equal(packed.readUInt32LE(0), 0x04034b50);
+assert.equal(packed.readUInt32LE(packed.length - 22), 0x06054b50);
+assert.equal(packed.readUInt16LE(packed.length - 12), Object.keys(exported).length);
+console.log("PASS editable ZIP, vertical/landscape/square dimensions, timed captions, and applied overlay placement");

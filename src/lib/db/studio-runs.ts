@@ -25,7 +25,7 @@ export async function studioRuns(userId: string, videoId: string) {
   const keys = new Map<number, string>();
   for (const revision of data ?? []) {
     const original = (revision.items as { kit: string; spec?: { id?: string } }[]).find(({ spec }) => spec?.id === videoId);
-    if (original) keys.set(revision.revision, studioSourceKey(original));
+    if (original?.spec) keys.set(revision.revision, studioSourceKey({ kit: original.kit, spec: original.spec }));
   }
   return runs.map((run) => !run.input.sourceKey && keys.has(run.input.revision)
     ? { ...run, input: { ...run.input, sourceKey: keys.get(run.input.revision) } } : run);
