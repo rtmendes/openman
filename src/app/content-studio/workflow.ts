@@ -66,7 +66,7 @@ export const stages = [
     description: "Write a payoff-first video around footage you can record.",
     instructions: [
       "Write script.md using original footage. Make a shot list that says exactly what to record.",
-      "Use the selected format. Match the runtime of comparable outliers when verified examples exist and explain any runtime estimate.",
+      "Use the selected format. When no target runtime is set, use comparable verified videos to estimate a suitable runtime.",
       "Show the payoff first, then write the full voiceover with visual cues, pacing, and transitions.",
       "Deliver three titles and a platform-ready description alongside the script.",
     ],
@@ -74,8 +74,16 @@ export const stages = [
 ] as const;
 
 export const examples = ["GTA 6", "Home coffee", "Street photography", "Personal finance"];
-export const formats = ["Guide", "Ranking", "Challenge", "Explainer", "Compilation"];
+export const formats = ["Guide", "Ranking", "Challenge", "Explainer", "Compilation", "Comedy skit"];
 export const platforms = ["YouTube", "TikTok", "Instagram"] as const;
+export const runtimes = [
+  { value: "", label: "Agent recommends" },
+  { value: "30", label: "30 seconds" },
+  { value: "60", label: "1 minute" },
+  { value: "90", label: "90 seconds" },
+  { value: "180", label: "3 minutes" },
+  { value: "300", label: "5 minutes" },
+] as const;
 type Platform = (typeof platforms)[number];
 
 export type Brief = {
@@ -85,10 +93,12 @@ export type Brief = {
   format: string;
   platforms: Platform[];
   notes: string;
+  runtimeSeconds?: number;
 };
 
 export function makePrompt(brief: Brief, index: number) {
   const stage = stages[index];
+  const targetRuntime = runtimes.find(({ value }) => value && Number(value) === brief.runtimeSeconds);
   return [
     "# " + stage.title,
     "## Content brief",
@@ -97,10 +107,14 @@ export function makePrompt(brief: Brief, index: number) {
     "- Language: " + brief.language.trim(),
     "- Format: " + brief.format,
     "- Platforms: " + brief.platforms.join(", "),
+    "- Target runtime: " + (targetRuntime?.label ?? "Recommend a runtime for the format and platforms"),
     ...(brief.notes.trim() ? ["", "## Source material and constraints", brief.notes.trim()] : []),
     "",
     "## Task",
     ...stage.instructions.map((instruction, i) => (i + 1) + ". " + instruction),
+    ...(targetRuntime && (index === 4 || index === 5 || index === 6) ? [
+      "Use the explicit runtime target where the selected platform supports it. For vertical cuts, flag incompatible lengths and propose a shorter version. For narration, estimate spoken word count and include timed beats and space for visual pauses. Treat runtime estimates as estimates until recorded.",
+    ] : []),
     "",
     "## Deliverables",
     stage.output,

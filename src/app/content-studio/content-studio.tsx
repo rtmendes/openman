@@ -7,7 +7,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
-import { examples, formats, makePrompt, platforms, stages, type Brief } from "./workflow";
+import { examples, formats, makePrompt, platforms, runtimes, stages, type Brief } from "./workflow";
 import { WorkflowRunner } from "./workflow-runner";
 import "./studio.css";
 
@@ -160,6 +160,11 @@ export function ContentStudio() {
                 </label>
                 <label>Language
                   <input value={brief.language} onChange={(event) => update("language", event.target.value)} maxLength={80} required />
+                </label>
+                <label>Target runtime
+                  <select value={brief.runtimeSeconds ?? ""} onChange={(event) => update("runtimeSeconds", event.target.value ? Number(event.target.value) : undefined)}>
+                    {runtimes.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                  </select>
                 </label>
                 <fieldset>
                   <legend>Platforms</legend>
