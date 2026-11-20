@@ -1,0 +1,82 @@
+[
+  {
+    "id": "setup",
+    "title": "Set up your agent",
+    "lesson": "Give the agent the creative brief, the source rules, and the approval points before it starts.",
+    "artifact": "STATUS.md",
+    "sample": "# Second Spring production status\nTopic: the 2 a.m. thermostat negotiation\nAudience: women navigating perimenopause\nAssets: original bedroom and thermostat footage\nReview gates: script → storyboard → rough cut\nPublishing: approval required",
+    "narration": "Start with the audience, the footage you can use, and who approves the work. This setup sheet keeps every later task on the same brief.",
+    "image": "bedroom",
+    "beats": ["Define the audience", "Record cleared assets", "Set the review gates"]
+  },
+  {
+    "id": "outliers",
+    "title": "Find breakout videos",
+    "lesson": "Compare each video with its own channel’s usual performance at a similar age.",
+    "artifact": "outliers.csv",
+    "sample": "hook,views,channel_median,view_multiple,data_source\nNighttime habits,48000,12000,4.0,illustrative example\nRelatable bedroom skit,27000,9000,3.0,illustrative example\nMorning routine,18000,15000,1.2,illustrative example",
+    "narration": "This example video has forty eight thousand views against a twelve thousand baseline. That is four times the usual performance. Look for the pattern behind that result.",
+    "image": "bedroom",
+    "beats": ["Match format and age", "48,000 ÷ 12,000 = 4×", "Study the opening hook"]
+  },
+  {
+    "id": "packaging",
+    "title": "Build titles & thumbnails",
+    "lesson": "Pair a specific title with one readable visual idea. Check that the video delivers the promise.",
+    "artifact": "THUMBNAILS.md",
+    "sample": "# Thumbnail concept A\nTitle: 2 A.M. Hostage Talks With My Thermostat\nImage: deadpan reaction, thermostat in frame\nOverlay: 2 A.M.\nCheck: face and clock read at phone size\nPromise: the joke lands in the first shot",
+    "narration": "The title sets up the thermostat gag. Use one expressive face and two short words in the thumbnail, then check that the first shot pays it off.",
+    "image": "thermostat",
+    "beats": ["Lead with a specific title", "One face, one visual cue", "Check the payoff"]
+  },
+  {
+    "id": "source",
+    "title": "Source the best clips",
+    "lesson": "Track the original source and reuse permission alongside each candidate.",
+    "artifact": "clips.csv",
+    "sample": "clip,source,reuse_status,decision\nThermostat insert,original footage,cleared,include\nBedroom reaction,original footage,cleared,include\nCreator reaction,third-party reference,unverified,hold",
+    "narration": "Keep the track record with the clip. The thermostat insert is original and cleared. The third party reaction stays out of the edit until its rights are verified.",
+    "image": "terms",
+    "beats": ["Keep the source", "Confirm reuse rights", "Hold uncleared footage"]
+  },
+  {
+    "id": "episode",
+    "title": "Edit the episode",
+    "lesson": "Build the rough cut around a payoff, a quick reset, and a reaction.",
+    "artifact": "episode-plan.md",
+    "sample": "00:00–00:03 · Thermostat drops. Open on the joke.\n00:03–00:12 · Cut back to the bedroom.\n00:12–00:22 · Water, fan, deadpan stare.\n00:22–00:30 · Reaction, then end card.",
+    "narration": "Start with the thermostat drop, then cut back to why she is awake. Use short inserts for the demands and hold her reaction long enough for the joke.",
+    "image": "thermostat",
+    "beats": ["Payoff first", "Reset the scene", "Hold the reaction"]
+  },
+  {
+    "id": "vertical",
+    "title": "Cut vertical clips",
+    "lesson": "Reframe the subject for a phone and keep captions above platform controls.",
+    "artifact": "shorts-plan.md",
+    "sample": "Frame: 1080 × 1920 (9:16)\nOpen on: thermostat dropping to 68\nCrop: center the face after the insert\nCaptions: short phrases above the lower interface\nQA: verify crop, text contrast and audio on a phone",
+    "narration": "In the vertical cut, put the thermostat and reaction near the center. Break the captions into short phrases and keep them clear of the buttons.",
+    "image": "thermostat",
+    "beats": ["Reframe to 9:16", "Keep the reaction centered", "Check caption safe areas"]
+  },
+  {
+    "id": "script",
+    "title": "Script an original video",
+    "lesson": "Write the line, the shot, and the timing together so the draft can be recorded.",
+    "artifact": "script.md",
+    "sample": "# Hostage Talks, 2 A.M.\n0–3s · Thermostat falls from 74 to 68.\nVO: “The thermostat blinked first.”\n3–12s · Bedroom. Throw off the blanket.\n12–22s · Water, fan, slow breath, deadpan stare.\n22–30s · Reaction and end card.",
+    "narration": "The thermostat blinked first. That is the hook. Put the shot and the line side by side, then leave enough time for the deadpan reaction.",
+    "image": "thermostat",
+    "beats": ["Write the first shot", "Match words to the frame", "Leave room for the laugh"]
+  },
+  {
+    "id": "batch",
+    "title": "Produce a batch",
+    "lesson": "Make related videos with different hooks and formats while keeping the same brand voice.",
+    "artifact": "batch-briefs.md",
+    "sample": "Second Spring · Thermostat negotiations · Skit · 30s · 9:16\nSecond Spring · Bedside comfort routine · Explainer · 45s · 9:16\nSecond Spring · A calmer evening · Branded motion · 15s · 1:1\n\nReview each script and shot list before export.",
+    "narration": "One brand, three different briefs. A comedy skit, an explainer, and a square motion piece. Each has its own script approval, then you can export them together.",
+    "image": "terms",
+    "beats": ["Give each video its own brief", "Review each script", "Export the approved batch"]
+  }
+]

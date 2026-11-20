@@ -28,7 +28,7 @@ function blank(): Item {
 
 const sampleShape = '{"title":"My video","caption":"Social caption","shots":[{"end":5,"narration":"Opening line","visual":"Describe the shot","overlay":"Opening text","sound":"Sound cue","asset":"Footage to record"}]}';
 
-export function ProductionBatch({ canLoadBrand, signedIn }: { canLoadBrand: boolean; signedIn: boolean }) {
+export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoadBrand: boolean; signedIn: boolean; onExample?: () => void }) {
   const [items, setItems] = useState<Item[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [dispatching, setDispatching] = useState(false);
@@ -181,6 +181,7 @@ export function ProductionBatch({ canLoadBrand, signedIn }: { canLoadBrand: bool
       </div>
     </div>
     <div className="production-actions content-studio-runActions">
+      {onExample && <button type="button" onClick={onExample}>Watch batch example</button>}
       <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={() => setItems((rows) => [...rows, blank()])}><Plus size={15} aria-hidden /> Add video</button>
       {signedIn ? <button type="button" className="content-studio-runButton" disabled={!ready || dispatching}
         onClick={generateScripts}>{dispatching ? "Starting scripts…" : `Generate scripts${ready ? ` (${ready})` : ""}`}</button>

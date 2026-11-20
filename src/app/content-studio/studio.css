@@ -309,6 +309,65 @@
 .content-studio-revision textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; }
 .content-studio-runActions { margin-top: 9px; }
 
+.studio-reference {
+  scroll-margin-top: 22px; overflow: hidden; border: 1px solid #eadce0; border-radius: 18px;
+  background: #fdf8f2; color: #282131; box-shadow: 0 8px 24px #40212f0c;
+}
+.studio-reference-hero {
+  position: relative; isolation: isolate; min-height: 310px; display: flex; align-items: flex-end;
+  padding: clamp(24px, 5vw, 54px); color: #fff3e6; background: #2e1d2a;
+}
+.studio-reference-hero img { object-fit: cover; object-position: 62% 45%; z-index: -2; }
+.studio-reference-hero::before {
+  content: ""; position: absolute; z-index: -1; inset: 0;
+  background: linear-gradient(94deg, #201321 5%, #201321ed 28%, #20132169 56%, #20132102 84%),
+    linear-gradient(0deg, #2013219e, transparent 40%);
+}
+.studio-reference-heroCopy { max-width: 390px; }
+.studio-reference-heroCopy p { font-size: 12px; font-weight: 650; color: #f6cdad; margin: 0 0 10px; }
+.studio-reference-heroCopy h2 {
+  font: 600 clamp(38px, 6vw, 70px)/.98 Georgia, serif; letter-spacing: -.052em; margin: 0 0 17px;
+}
+.studio-reference-heroCopy span { font-size: 14px; line-height: 1.5; display: block; max-width: 295px; }
+.studio-reference-body { padding: 17px clamp(14px, 2.7vw, 24px) 21px; }
+.studio-reference-nav { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.studio-reference-nav button {
+  display: inline-flex; gap: 6px; align-items: center; padding: 7px 9px; border-radius: 7px;
+  border: 1px solid #e5d8dd; background: #fffdfb; color: #564558; text-align: left;
+  font-size: 12px; font-weight: 620;
+}
+.studio-reference-nav button[aria-pressed="true"] { color: white; background: #453048; border-color: #453048; }
+.studio-reference-example { display: grid; grid-template-columns: 1.1fr .9fr; gap: 19px; align-items: start; }
+.studio-reference-player { min-width: 0; overflow: hidden; border-radius: 11px; background: #241923; aspect-ratio: 16 / 9; }
+.studio-reference-player video { width: 100%; height: 100%; display: block; }
+.studio-reference-play { position: relative; display: grid; place-items: center; width: 100%; height: 100%; isolation: isolate; }
+.studio-reference-play img { object-fit: cover; z-index: -2; }
+.studio-reference-play::before { content: ""; position: absolute; inset: 0; z-index: -1; background: #21152229; }
+.studio-reference-play span {
+  display: inline-flex; align-items: center; gap: 8px; background: #fff7ee; color: #372739;
+  border-radius: 999px; padding: 11px 15px; font-weight: 650; font-size: 13px; box-shadow: 0 4px 18px #25182344;
+}
+.studio-reference-output h3 { margin: 0 0 6px; font: 600 24px/1.14 Georgia, serif; letter-spacing: -.025em; }
+.studio-reference-output p { color: #594a57; font-size: 13px; line-height: 1.5; margin: 0 0 10px; }
+.studio-reference-output details { padding: 8px 0; border-top: 1px solid #e9dedf; }
+.studio-reference-output summary { cursor: pointer; font-size: 12px; font-weight: 700; }
+.studio-reference-output summary span { margin-left: 6px; font: 11px ui-monospace, monospace; color: #685575; }
+.studio-reference-output pre {
+  margin: 8px 0; padding: 9px; background: #fff; border: 1px solid #ebdfe0; border-radius: 7px;
+  font: 11px/1.45 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.studio-reference-output button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 0; color: #655086; font-size: 12px; font-weight: 700;
+}
+.studio-reference-transcript { margin-top: 9px; }
+#stage-workbench { scroll-margin-top: 20px; }
+@media (max-width: 740px) {
+  .studio-reference-example { grid-template-columns: 1fr; gap: 13px; }
+  .studio-reference-hero { min-height: 260px; }
+  .studio-reference-hero img { object-position: 72% center; }
+  .studio-reference-hero::before { background: linear-gradient(90deg, #201321e8, #20132139), linear-gradient(0deg, #201321ab, transparent); }
+}
+
 .production-batch { scroll-margin-top: 68px; padding: 20px; }
 .production-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .production-actions button { display: inline-flex; align-items: center; gap: 6px; }
