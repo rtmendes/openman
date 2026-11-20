@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
 import { remoteComputerId } from "@/lib/agent/server/remote";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { notFound, readBody, withTask } from "@/lib/agent/server/http";
 import { attachmentsSchema } from "@/lib/agent/attachments";
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (mode === "steer") await runtime.steer(text);
     else if (mode === "interrupt") await runtime.interrupt(text);
     else await runtime.queueMessage(text);
+    after(() => runtime.waitForActiveRun());
     return NextResponse.json({ ok: true });
   });
 }

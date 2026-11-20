@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { attachmentsSchema } from "@/lib/agent/attachments";
 import type { CreateTaskInput } from "@/lib/agent/types";
 import { readBody, withStore } from "@/lib/agent/server/http";
-import { createTask, isModeId, listTasks } from "@/lib/agent/server/tasks";
+import { createTask, isModeId, listTasks, runtimeFor } from "@/lib/agent/server/tasks";
 
 const createSchema = z.object({
   prompt: z.string().trim().min(1, "Write a prompt first.").max(200_000),
@@ -49,6 +49,8 @@ export function POST(req: NextRequest) {
     const body = await readBody(req, createSchema);
     if ("error" in body) return body.error;
     const task = await createTask(store, body.data satisfies CreateTaskInput);
+    const runtime = await runtimeFor(store, task.id);
+    if (runtime) after(() => runtime.waitForActiveRun());
     return NextResponse.json({ task }, { status: 201 });
   });
 }

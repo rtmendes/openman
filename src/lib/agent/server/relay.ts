@@ -814,6 +814,16 @@ export class TaskRuntime {
     return interaction === "chat" || interaction === "plan" ? CHAT_PROFILE : undefined;
   }
 
+  private activeWork: Promise<void> | undefined;
+
+  async waitForActiveRun(): Promise<void> {
+    try {
+      await this.activeWork;
+    } finally {
+      await this.flush();
+    }
+  }
+
   /** Starts a run. `echo` emits the `user.message` for it first (false when it was emitted earlier). */
   private launch(text: string, echo: boolean): void {
     if (this.run) {
@@ -826,7 +836,7 @@ export class TaskRuntime {
     this.run = run;
     // Every run opens with an explicit status, even when the task never left "running" in between.
     if (this.task.status !== "waking") this.setStatus("running", undefined, true);
-    void this.takeSlot(run, text)
+    this.activeWork = this.takeSlot(run, text)
       .then((granted) => (granted && !run.done ? this.drive(run, text) : undefined))
       .finally(() => this.afterRun(run));
   }
