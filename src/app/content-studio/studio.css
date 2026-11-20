@@ -243,3 +243,68 @@
   .content-studio-steps { display: none; }
   .content-studio-stepSelect { display: block; }
 }
+
+.content-studio-pipeline {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: 0 3px 12px #35205b08;
+}
+.content-studio-pipelineHeader, .content-studio-runActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+.content-studio-pipelineHeader { justify-content: space-between; }
+.content-studio-pipelineHeader h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 730;
+}
+.content-studio-pipelineHeader h2 svg { color: var(--accent); }
+.content-studio-pipelineHeader p, .content-studio-runState p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.content-studio-runActions button, .content-studio-runButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.content-studio-pipeline .content-studio-runButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.content-studio-runState { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; overflow-wrap: anywhere; }
+.content-studio-runState a { color: var(--accent); text-decoration: underline; font-size: 13px; }
+.content-studio-runStages { display: grid; gap: 3px; margin: 9px 0; }
+.content-studio-runStages li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f8f5ff;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.content-studio-runStages li span:nth-child(2) { color: var(--muted); }
+.content-studio-stageReview { margin: 9px 0; padding: 10px; background: var(--tint); border-radius: 8px; font-size: 13px; }
+.content-studio-stageReview summary { cursor: pointer; margin-top: 5px; }
+.content-studio-stageReview dt { margin-top: 8px; font-weight: 650; }
+.content-studio-stageReview dd { white-space: pre-wrap; }
+.content-studio-revision { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; }
+.content-studio-revision textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; }
+.content-studio-runActions { margin-top: 9px; }

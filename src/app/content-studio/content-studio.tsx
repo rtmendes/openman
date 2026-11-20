@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Im
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { examples, formats, makePrompt, platforms, stages, type Brief } from "./workflow";
+import { WorkflowRunner } from "./workflow-runner";
 import "./studio.css";
 
 const icons = [Settings2, Search, Image, ListVideo, Film, Smartphone, FileText];
@@ -102,6 +103,8 @@ export function ContentStudio() {
               ))}
             </div>
           </section>
+
+          <WorkflowRunner brief={brief} ready={ready} />
 
           <div className="content-studio-editor">
             <section className="content-studio-document" aria-labelledby="output-heading">
