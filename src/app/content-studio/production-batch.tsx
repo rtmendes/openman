@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Clapperboard, CopyPlus, Download, Plus, X } from "lucide-react";
 import { createTask, getSecondSpringContext, getTask, startStudioRun, studioMediaUrl, uploadStudioMedia } from "@/lib/agent/client";
 import type { StudioMedia } from "@/lib/studio/media-types";
-import type { StudioAlternative, StudioRun } from "@/lib/studio/runs";
+import { matchesStudioSource, type StudioAlternative, type StudioRun } from "@/lib/studio/runs";
 import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
 import { NarrationOptions, ReferenceInputs } from "./production-inputs";
@@ -232,7 +232,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       addCopies([{ spec: run.input.spec, kit: run.input.kit, script, variationLabel: run.state.plan.title }], false);
       return;
     }
-    if (run.input.revision !== drafts.savedRevision || item.script !== run.input.script) return;
+    if (!matchesStudioSource(run, item, drafts.savedRevision)) return;
     patch(item.spec.id, (row) => ({ ...row, script, stale: false, error: undefined,
       approved: { spec: row.spec, plan: run.state.plan!, brandContext: run.input.brief.brandContext ?? "" } }));
   }
@@ -245,7 +245,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         kit: run.input.kit, script: "", variationLabel: option.label }], false);
       return;
     }
-    if (!copy && (run.input.revision !== drafts.savedRevision || item.script !== run.input.script)) return;
+    if (!copy && !matchesStudioSource(run, item, drafts.savedRevision)) return;
     try {
       const original = parseVideoPlan(run.input.script);
       const plan = selection.action === "caption" ? { ...original, caption: option.text } : {
@@ -478,7 +478,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           }} aria-label={`Private preview of ${item.approved?.plan.title ?? spec.keyword}`} />}
         </div> : null}
       </article>
-      {draftKey && <ProjectAgent spec={spec} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
+      {draftKey && <ProjectAgent spec={spec} kit={item.kit} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
         revision={drafts.savedRevision} stage={stage} onStage={onStage} activity={activity} canStart={Boolean(spec.keyword.trim()) && !locked && (item.kit !== "second-spring" || brandStatus === "ready")}
         canCopy={items.length < limit} onPlan={(run, copy) => loadRunPlan(item, run, copy)} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
       </div>;

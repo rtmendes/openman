@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Workflow } from "lucide-react";
 import { decideStudioRun, listStudioRuns, startStudioRun, studioMediaUrl } from "@/lib/agent/client";
-import { isStudioRunActive, suggestionActions, type StartStudioRun, type StudioAlternative, type StudioRun, type StudioSuggestion } from "@/lib/studio/runs";
+import { isStudioRunActive, isStudioRunOpen, matchesStudioSource, suggestionActions, type StartStudioRun, type StudioAlternative, type StudioRun, type StudioSuggestion } from "@/lib/studio/runs";
 import { chosenFrames, parseVideoPlan, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { stages } from "./workflow";
 
@@ -14,8 +14,8 @@ const phaseLabels: Record<StudioRun["phase"], string> = {
 };
 type RunRequest = { kind: "script" } | { kind: "workflow"; stage?: number } | { kind: "suggestion"; suggestion: StudioSuggestion };
 
-export function ProjectAgent({ spec, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy }: {
-  spec: VideoSpec; script: string; plan?: VideoPlan; shot: number; onShot: (index: number) => void; revision?: number;
+export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy }: {
+  spec: VideoSpec; kit: string; script: string; plan?: VideoPlan; shot: number; onShot: (index: number) => void; revision?: number;
   stage: number; onStage: (index: number) => void; activity: number; canStart: boolean; canCopy: boolean;
   onPlan: (run: StudioRun, copy: boolean) => void;
   onSuggestion: (run: StudioRun, option: StudioAlternative, copy: boolean) => void;
@@ -43,7 +43,8 @@ export function ProjectAgent({ spec, script, plan, shot, onShot, revision, stage
         setRuns((prior) => {
           const merged = new Map(prior.map((run) => [run.id, run]));
           for (const run of fresh) if ((merged.get(run.id)?.version ?? 0) <= run.version) merged.set(run.id, run);
-          return [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30);
+          return [...merged.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
+            .filter((run, index) => index < 30 || isStudioRunOpen(run.phase));
         });
         setPollError(false);
         if (fresh.some(({ phase }) => isStudioRunActive(phase))) interval = 3500;
@@ -55,7 +56,11 @@ export function ProjectAgent({ spec, script, plan, shot, onShot, revision, stage
   }, [videoId, activity]);
 
   function remember(run: StudioRun) {
-    setRuns((old) => [run, ...old.filter(({ id }) => id !== run.id)].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    setRuns((old) => {
+      const sourceKey = run.input.sourceKey ?? old.find(({ id }) => id === run.id)?.input.sourceKey;
+      return [{ ...run, input: { ...run.input, sourceKey } }, ...old.filter(({ id }) => id !== run.id)]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    });
     setResultId(run.id);
   }
 
@@ -88,14 +93,14 @@ export function ProjectAgent({ spec, script, plan, shot, onShot, revision, stage
   }
 
   const run = runs.find(({ id }) => id === resultId) ?? runs[0];
-  const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && !["complete", "stopped"].includes(entry.phase));
+  const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && isStudioRunOpen(entry.phase));
   const baseDisabled = loading || pending || !revision || !canStart;
   const selected = run?.input.suggestion;
   let sourcePlan: VideoPlan | undefined;
   if (selected && run.input.script) try { sourcePlan = parseVideoPlan(run.input.script); } catch { /* Angle suggestions also work without a shot plan. */ }
   const sourceShot = sourcePlan?.shots[selected?.shot ?? 0];
   const before = selected?.action === "caption" ? sourcePlan?.caption : selected?.action === "visual" ? sourceShot?.visual : sourceShot?.narration;
-  const matchingDraft = run?.input.script === script && run?.input.revision === revision;
+  const matchingDraft = run ? matchesStudioSource(run, { kit, spec, script }, revision) : false;
   const frame = chosenFrames(spec).includes(ratio) ? ratio : chosenFrames(spec)[0];
   const image = spec.media?.find(({ type }) => type.startsWith("image/"));
 

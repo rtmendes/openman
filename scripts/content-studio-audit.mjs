@@ -105,3 +105,18 @@ const layout = { label: "High title", text: "Frame her face below the top title.
 assert.throws(() => checkedStudioOutput(withSuggestion, JSON.stringify({ alternatives: [layout] })));
 assert.equal(checkedStudioOutput(withSuggestion, JSON.stringify({ alternatives: [layout, { ...layout, overlayPosition: "lower" }] })).phase, "complete");
 console.log("PASS durable seven-stage handoffs, approval gates, retry, isolated stage, and visual suggestions");
+
+const { matchesStudioSource, studioSourceKey, isStudioRunOpen } = require("../src/lib/studio/runs.ts");
+const originalProject = { kit: "second-spring", spec: { keyword: "Nighttime thermostat", duration: 30, voice: { style: "Dry and deadpan", rate: 1 } }, script: JSON.stringify(finishedPlan) };
+const result = { input: { revision: 10, script: originalProject.script, sourceKey: studioSourceKey(originalProject) } };
+const serverOrder = { ...originalProject, spec: { duration: 30, voice: { rate: 1, style: "Dry and deadpan" }, keyword: "Nighttime thermostat" } };
+assert.equal(matchesStudioSource(result, serverOrder, 11), true, "Saving another project must not lock this project's result.");
+assert.equal(matchesStudioSource(result, { ...originalProject, spec: { ...originalProject.spec, duration: 45 } }, 11), false);
+assert.equal(matchesStudioSource(result, { ...originalProject, script: "An edited script" }, 11), false);
+assert.equal(matchesStudioSource(result, { ...originalProject, kit: "custom" }, 11), false);
+assert.equal(matchesStudioSource(result, originalProject), false, "Unsaved changes cannot be overwritten.");
+assert.equal(matchesStudioSource({ input: { revision: 10, script: originalProject.script } }, originalProject, 11), false, "Old records need their source snapshot before applying to a new batch revision.");
+assert.equal(isStudioRunOpen("review"), true);
+assert.equal(isStudioRunOpen("blocked"), true);
+assert.equal(isStudioRunOpen("complete"), false);
+console.log("PASS project-specific bulk result application and stale edit protection");

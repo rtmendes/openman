@@ -62,6 +62,7 @@ export function readStudioSuggestions(output: string, selection: StudioSuggestio
 
 export type StudioRunInput = {
   revision: number;
+  sourceKey?: string;
   kit: "custom" | "second-spring";
   spec: VideoSpec;
   brief: Brief;
@@ -98,4 +99,23 @@ export const activeStudioPhases = ["queued", "dispatching", "running", "waiting"
 
 export function isStudioRunActive(phase: StudioRunPhase) {
   return activeStudioPhases.some((entry) => entry === phase);
+}
+
+export function isStudioRunOpen(phase: StudioRunPhase) {
+  return phase !== "complete" && phase !== "stopped";
+}
+
+type ProjectSource = { spec: unknown; kit: string; script: string };
+
+/** Postgres JSONB and the editor can order the same object's fields differently. */
+export function studioSourceKey(source: Pick<ProjectSource, "spec" | "kit">) {
+  return JSON.stringify({ kit: source.kit, spec: source.spec }, (_key, value) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]]));
+  });
+}
+
+export function matchesStudioSource(run: StudioRun, source: ProjectSource, savedRevision?: number) {
+  if (!savedRevision || source.script !== run.input.script) return false;
+  return run.input.sourceKey === undefined ? savedRevision === run.input.revision : run.input.sourceKey === studioSourceKey(source);
 }

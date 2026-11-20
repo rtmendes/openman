@@ -5,7 +5,7 @@ import { db, fail } from "@/lib/db/client";
 import { studioDraft } from "@/lib/db/studio-drafts";
 import { operatorFor } from "@/lib/observability/operator";
 import type { Session } from "@/lib/session";
-import type { StartStudioRun, StudioRunInput } from "./runs";
+import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
 const project = z.object({
@@ -52,7 +52,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
     }
   }
   return {
-    revision: input.revision, kit, spec, script,
+    revision: input.revision, sourceKey: studioSourceKey({ kit, spec: row?.spec }), kit, spec, script,
     brief: { topic: spec.keyword, audience: spec.audience?.trim() || "", language: spec.language?.trim() || "English",
       format: videoTypes[spec.type].label, platforms: spec.platforms ?? [...platforms], runtimeSeconds: spec.duration, notes, brandContext: context },
     ...(input.kind === "workflow" && input.stage !== undefined ? { singleStage: input.stage } : {}),

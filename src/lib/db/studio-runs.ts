@@ -1,14 +1,34 @@
 import type { StartStudioRun, StudioRun, StudioRunInput, StudioRunPhase, StudioRunState } from "@/lib/studio/runs";
-import { activeStudioPhases } from "@/lib/studio/runs";
+import { activeStudioPhases, studioSourceKey } from "@/lib/studio/runs";
 import { db, fail } from "./client";
 
 const columns = "id,video_id,kind,phase,version,input,state,due_at,created_at,updated_at";
 
 export async function studioRuns(userId: string, videoId: string) {
-  const { data, error } = await db().from("studio_runs").select(columns).eq("user_id", userId).eq("video_id", videoId)
-    .order("created_at", { ascending: false }).limit(30);
-  if (error) fail("list Studio runs", error);
-  return (data ?? []) as StudioRun[];
+  const scoped = () => db().from("studio_runs").select(columns).eq("user_id", userId).eq("video_id", videoId);
+  const [recent, open] = await Promise.all([
+    scoped().order("created_at", { ascending: false }).limit(30),
+    scoped().in("phase", [...activeStudioPhases, "review", "blocked"]),
+  ]);
+  if (recent.error) fail("list Studio runs", recent.error);
+  if (open.error) fail("list open Studio runs", open.error);
+  const unique = new Map<string, StudioRun>();
+  for (const run of [...(recent.data ?? []), ...(open.data ?? [])] as StudioRun[]) {
+    if ((unique.get(run.id)?.version ?? 0) <= run.version) unique.set(run.id, run);
+  }
+  const runs = [...unique.values()].sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const legacy = runs.filter(({ input, state }) => input.sourceKey === undefined && (state.plan || state.alternatives));
+  if (!legacy.length) return runs;
+  const revisions = [...new Set(legacy.map(({ input }) => input.revision))];
+  const { data, error } = await db().from("studio_draft_versions").select("revision,items").eq("user_id", userId).in("revision", revisions);
+  if (error) fail("read original Studio project versions", error);
+  const keys = new Map<number, string>();
+  for (const revision of data ?? []) {
+    const original = (revision.items as { kit: string; spec?: { id?: string } }[]).find(({ spec }) => spec?.id === videoId);
+    if (original) keys.set(revision.revision, studioSourceKey(original));
+  }
+  return runs.map((run) => !run.input.sourceKey && keys.has(run.input.revision)
+    ? { ...run, input: { ...run.input, sourceKey: keys.get(run.input.revision) } } : run);
 }
 
 export async function studioRun(userId: string, id: string) {
