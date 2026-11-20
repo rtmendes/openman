@@ -10,6 +10,7 @@ import { APP_HOME } from "@/lib/supabase/config";
 import { getSecondSpringContext } from "@/lib/agent/client";
 import { examples, formats, makePrompt, platforms, runtimes, stages, type Brief } from "./workflow";
 import { WorkflowRunner } from "./workflow-runner";
+import { ProductionBatch } from "./production-batch";
 import "./studio.css";
 
 const icons = [Settings2, Search, Image, ListVideo, Film, Smartphone, FileText];
@@ -21,7 +22,7 @@ const script = [
   ["23–30s", "Take a bite of toast. Look straight at camera.", "If you’ve ever gone looking for one thing and come back with a snack, come sit by me."],
 ];
 
-export function ContentStudio({ canLoadBrand = false }: { canLoadBrand?: boolean }) {
+export function ContentStudio({ canLoadBrand = false, signedIn = false }: { canLoadBrand?: boolean; signedIn?: boolean }) {
   const [brief, setBrief] = useState<Brief>({
     topic: "GTA 6",
     audience: "",
@@ -99,7 +100,10 @@ export function ContentStudio({ canLoadBrand = false }: { canLoadBrand?: boolean
     <main className="content-studio-studio">
       <header className="content-studio-bar">
         <h1 className="content-studio-wordmark"><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
-        <Link href="/" className="content-studio-back"><ArrowLeft size={15} aria-hidden /> Home</Link>
+        <nav className="production-actions" aria-label="Studio pages">
+          <a href="#video-production" className="content-studio-back"><Film size={15} aria-hidden /> Video production</a>
+          <Link href="/" className="content-studio-back"><ArrowLeft size={15} aria-hidden /> Home</Link>
+        </nav>
       </header>
 
       <div className="content-studio-workspace">
@@ -125,6 +129,7 @@ export function ContentStudio({ canLoadBrand = false }: { canLoadBrand?: boolean
         </nav>
 
         <div className="content-studio-main">
+          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} />
           <section className="content-studio-topic" aria-labelledby="topic-heading">
             <div className="content-studio-heroArt" aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
             <h2 id="topic-heading">What are you creating?</h2>

@@ -18,5 +18,5 @@ export default function Page() {
 async function StudioSession() {
   const session = await getSession();
   const owner = session && process.env.APP_DB_SCHEMA === "mahara" && (await operatorFor(session))?.owner;
-  return <ContentStudio canLoadBrand={Boolean(owner)} />;
+  return <ContentStudio canLoadBrand={Boolean(owner)} signedIn={Boolean(session)} />;
 }

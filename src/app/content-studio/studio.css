@@ -308,3 +308,39 @@
 .content-studio-revision { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; }
 .content-studio-revision textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; }
 .content-studio-runActions { margin-top: 9px; }
+
+.production-batch { scroll-margin-top: 68px; padding: 20px; }
+.production-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.production-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.production-hint { margin: 10px 0; color: var(--muted); font-size: 13px; }
+.production-item { border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; padding: 15px; }
+.production-itemHeading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.production-itemHeading h3 { font-size: 16px; margin: 0 auto 0 0; overflow-wrap: anywhere; }
+.production-itemHeading span { color: var(--muted); font-size: 12px; min-width: max-content; }
+.production-itemHeading button { display: grid; place-items: center; padding: 5px; background: transparent; border: 1px solid var(--line); border-radius: 5px; }
+.production-fields { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+.production-item label { display: grid; gap: 4px; font-size: 13px; font-weight: 550; min-width: 0; }
+.production-item input, .production-item select, .production-item textarea {
+  min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 7px; background: var(--paper, white);
+  color: var(--ink); padding: 7px 9px; font: inherit; font-weight: 400;
+}
+.production-item textarea { resize: vertical; }
+.production-wide { grid-column: 1 / -1; }
+.production-shotFields { display: grid; gap: 2px; padding: 10px; background: var(--tint); border-radius: 6px; }
+.production-item summary, .production-toolchain summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+.production-item details label { margin-top: 8px; }
+.production-item > a, .production-toolchain a { color: var(--accent); text-decoration: underline; }
+.production-shots, .production-edit, .production-preview, .production-toolchain { margin-top: 12px; }
+.production-shots ol { padding-left: 22px; display: grid; gap: 7px; }
+.production-shots li { padding: 8px; background: var(--tint); border-radius: 6px; }
+.production-shots p, .production-preview p, .production-toolchain li { font-size: 13px; margin: 5px 0; }
+.production-preview { max-width: 480px; }
+.production-preview video { display: block; width: 100%; max-height: 520px; margin-top: 10px; background: #151719; }
+.production-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 680px) {
+  .production-batch { padding: 14px; }
+  .production-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .production-fields { grid-template-columns: minmax(0, 1fr); }
+}
