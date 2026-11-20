@@ -107,6 +107,13 @@ demonstrations, the public API (`/api/v1`) with outgoing webhooks, and the opera
 triggers, retries and delivers outgoing webhooks, backfills task costs, sweeps idle task folders, records a heartbeat
 and checks alerts. Ticks are safe to run concurrently, so an external cron calling the same endpoint works too.
 
+On Mahara deployments, Content Studio stores workflow and suggestion runs with their project revision and approval
+state in `studio_runs`. The owner starts each run and the clock recovers interrupted work. A database lease and a
+reserved task ID prevent concurrent ticks from dispatching the same stage twice. The existing worker ticks Studio too.
+For a self-hosted Supabase deployment using `pg_cron` and `pg_net`, an administrator can schedule
+`mahara_private.request_studio_tick('<production origin>/api/cron/studio')` every minute as the database owner.
+The private function only calls the app when work is due, using a short-lived single-use ticket.
+
 ## Code contracts
 
 ```ts

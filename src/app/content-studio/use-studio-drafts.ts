@@ -13,6 +13,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
   const [online, setOnline] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(draftKey ? "opening" : "local");
   const [versions, setVersions] = useState<StudioVersion[]>([]);
+  const [savedSnapshot, setSavedSnapshot] = useState({ revision: 0, serialized: "" });
   const [recovery, setRecovery] = useState<T[] | null>(null);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const state = useRef({ revision: 0, saved: "", busy: false, conflict: false, items: [] as T[] });
@@ -43,6 +44,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
           if (draft) {
             state.current.revision = draft.revision;
             saved = serialize(draft.items);
+            setSavedSnapshot({ revision: draft.revision, serialized: saved });
             if (!(local.dirty && local.revision === draft.revision)) {
               if (local.dirty && serialize(local.items) !== saved) {
                 setRecovery(local.items);
@@ -87,6 +89,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
       }
       remote.revision = result.revision;
       remote.saved = serialized;
+      setSavedSnapshot({ revision: result.revision, serialized });
       setVersions((current) => [{ revision: result.revision, created_at: result.savedAt }, ...current.filter((entry) => entry.revision !== result.revision)].slice(0, 100));
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify({ items: remote.items, revision: remote.revision, dirty: serialize(remote.items) !== serialized }));
@@ -130,6 +133,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
       state.current.conflict = false;
       state.current.revision = draft?.revision ?? 0;
       state.current.saved = serialize(draft?.items ?? []);
+      setSavedSnapshot({ revision: state.current.revision, serialized: state.current.saved });
       state.current.items = rows;
       setItems(rows);
       setVersions(history);
@@ -141,6 +145,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
 
   return {
     items, setItems, hydrated, status, versions, recovery, reopen,
+    savedRevision: online && savedSnapshot.revision > 0 && savedSnapshot.serialized === serialize(items) ? savedSnapshot.revision : undefined,
     clearRecovery: () => {
       setRecovery(null);
       try { sessionStorage.removeItem(recoveryKey); } catch { /* Recovery is cleared for this visit. */ }

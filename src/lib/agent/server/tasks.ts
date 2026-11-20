@@ -155,6 +155,8 @@ async function contextFor(store: Store, input: CreateTaskInput): Promise<TaskCon
 }
 
 export interface CreateOptions {
+  /** A preallocated task ID lets a durable dispatcher recover the same task after interruption. */
+  id?: string;
   /** A title instead of one derived from the prompt. */
   title?: string;
   /** Extra fields for the task's meta (a parallel task's parent, a side chat's kind). */
@@ -171,7 +173,7 @@ export async function createTask(store: Store, input: CreateTaskInput, opts: Cre
   // Hermes' API server does not expand a leading "/skill" itself: pass it on as a skill to load (skill_view).
   const slash = slashSkill(input.prompt);
   if (slash && !input.skills?.includes(slash)) input = { ...input, skills: [...(input.skills ?? []), slash] };
-  const id = newTaskId();
+  const id = opts.id ?? newTaskId();
   const context = await contextFor(store, input);
   const references = await resolveReferences(store, input.references);
   const interaction = input.interaction === "chat" || input.interaction === "plan" ? input.interaction : undefined;

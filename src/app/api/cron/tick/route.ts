@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { tick } from "@/lib/automations/engine";
+import { tickStudioRuns } from "@/lib/studio/dispatcher";
 import { processOutbox } from "@/lib/public-api/webhooks";
 import { sweepIdleWorkspaces } from "@/lib/agent/server/hygiene";
 // [observability] heartbeat, operator alerts, cost backfill, log pruning (src/lib/observability, docs/OPERATIONS.md)
@@ -30,6 +31,7 @@ function authorized(req: NextRequest): boolean {
  */
 export async function POST(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  after(tickStudioRuns);
   const startedAt = Date.now();
   try {
     const result = await tick();

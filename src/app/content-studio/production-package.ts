@@ -20,10 +20,10 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
     ...shot, start: i ? plan.shots[i - 1].end : 0, file: `assets/shot-${String(i + 1).padStart(2, "0")}.mp4`,
   }));
   const spoken = shots.filter(({ narration }) => narration);
-  const parts = shots.map(({ start, end, file, overlay }, i) => {
+  const parts = shots.map(({ start, end, file, overlay, overlayPosition }, i) => {
     const timing = `data-start="${start}" data-duration="${end - start}"`;
     return `<video id="shot-${i}" class="clip footage" ${timing} data-track-index="0" src="${file}" muted playsinline></video>
-<div id="overlay-${i}" class="clip caption" ${timing} data-track-index="1">${escapeHtml(overlay)}</div>`;
+<div id="overlay-${i}" class="clip caption ${overlayPosition ?? "lower"}" ${timing} data-track-index="1">${escapeHtml(overlay)}</div>`;
   }).join("\n");
   const editorial = [
     `# ${plan.title}`, "", `- Brand: ${spec.brand || "Unbranded"}`, `- Keyword: ${spec.keyword}`,
@@ -33,10 +33,12 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
     ...(spec.media ?? []).map(({ name }) => `- Private material in Content Studio: ${name}`),
     "## Brand Kit", brandContext || "No brand kit supplied.", "",
     "## Shot order and timing",
-    ...shots.flatMap(({ start, end, narration, visual, sound, asset, file, overlay }, i) => [
+    ...shots.flatMap(({ start, end, narration, visual, sound, asset, file, overlay, overlayPosition }, i) => [
       "", `### Shot ${i + 1} · ${start}–${end}s`, visual, `- Narration: ${narration || "Silence"}`,
-      `- Asset: ${asset}`, `- Sound: ${sound}`, `- On-screen text: ${overlay}`, `- Timeline file: ${file}`,
+      `- Asset: ${asset}`, `- Sound: ${sound}`, `- On-screen text (${overlayPosition ?? "lower"}): ${overlay}`, `- Timeline file: ${file}`,
     ]),
+    ...(plan.titleOptions ? ["", "## Alternate titles", ...plan.titleOptions.map((title) => `- ${title}`)] : []),
+    ...(plan.description ? ["", "## Platform description", plan.description] : []),
     "", "## Social caption", plan.caption,
   ].join("\n");
   return {
@@ -45,6 +47,7 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
 #main{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:#111}
 .footage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .caption{position:absolute;z-index:2;bottom:15%;left:9%;width:82%;text-align:center;padding:.38em .58em;background:rgba(12,15,19,.86);border-radius:.3em;font-size:${Math.round(Math.min(width, height) * 0.05)}px;font-weight:700;line-height:1.18;overflow-wrap:anywhere}
+.caption.top{top:12%;bottom:auto}.caption.middle{top:50%;bottom:auto;transform:translateY(-50%)}
 </style><body><div id="main" data-composition-id="main" data-start="0" data-duration="${spec.duration}" data-width="${width}" data-height="${height}">
 ${parts}
 <audio id="narration" class="clip" src="assets/voiceover.wav" data-start="0" data-duration="${spec.duration}" data-track-index="2"></audio>

@@ -117,13 +117,13 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
       return;
     }
     selectStep(index);
-    document.getElementById("stage-workbench")?.scrollIntoView({ block: "start" });
+    document.getElementById(draftKey ? "studio-run-heading" : "stage-workbench")?.scrollIntoView({ block: "start" });
   }
 
   const StageIcon = icons[active];
 
   return (
-    <main className="content-studio-studio" data-theme={theme}>
+    <main className={`content-studio-studio${draftKey ? " content-studio-unified" : ""}`} data-theme={theme}>
       <header className="content-studio-bar">
         <h1 className="content-studio-wordmark"><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
         <nav className="production-actions" aria-label="Studio pages">
@@ -139,7 +139,7 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
       </header>
 
       <div className="content-studio-workspace">
-        <nav className="content-studio-rail" aria-labelledby="workflow-heading">
+        {!draftKey && <nav className="content-studio-rail" aria-labelledby="workflow-heading">
           <h2 id="workflow-heading">Workflow</h2>
           <ol className="content-studio-steps">
             {stages.map((item, index) => {
@@ -158,12 +158,21 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
           <select className="content-studio-stepSelect" aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
             {stages.map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}
           </select>
-        </nav>
+        </nav>}
 
         <div className="content-studio-main">
-          {canLoadBrand && <ReferenceLibrary selected={referenceIndex} onSelect={setReferenceIndex} onOpen={openExampleWorkflow} />}
-          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} draftKey={draftKey}
+          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} draftKey={draftKey} stage={active} onStage={selectStep}
             onExample={canLoadBrand ? () => seeExample(stages.length) : undefined} />
+          {canLoadBrand && <>
+            <ReferenceLibrary selected={referenceIndex} onSelect={setReferenceIndex} onOpen={openExampleWorkflow} />
+            {draftKey && <details className="content-studio-pipeline content-studio-runState">
+              <summary>Preview Hostage Talks, 2 A.M.</summary>
+              <p>30-second vertical animation · Narration and captions · Draft for review</p>
+              <video controls playsInline preload="none" width={320} style={{ maxWidth: "100%", display: "block" }}
+                aria-label="Hostage Talks, 2 A.M. animated draft" src="/api/admin/second-spring/video" />
+            </details>}
+          </>}
+          {!draftKey && <>
           <section className="content-studio-topic" aria-labelledby="topic-heading">
             <div className="content-studio-heroArt" aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
             <h2 id="topic-heading">What are you creating?</h2>
@@ -293,8 +302,10 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
               </div>
             </aside>
           </div>
+          </>}
         </div>
       </div>
     </main>
   );
 }
+

@@ -11,6 +11,55 @@
   color-scheme: light;
 }
 
+.content-studio-unified .content-studio-workspace { display: block; }
+.studio-project-grid { display: grid; grid-template-columns: minmax(135px, 176px) minmax(0, 1fr); gap: 14px; margin-top: 16px; align-items: start; }
+.studio-project-list { display: grid; gap: 6px; min-width: 0; }
+.studio-project-list h3 { margin: 0 0 4px; font-size: 14px; }
+.studio-project-list button { display: grid; gap: 3px; text-align: left; min-height: 44px; padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); overflow-wrap: anywhere; }
+.studio-project-list button[aria-current="page"] { background: var(--tint); border-color: var(--accent); }
+.studio-project-list small { color: var(--muted); font-size: 11px; }
+.studio-project-body { min-width: 0; }
+.studio-project-body-agent { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 31%); gap: 14px; align-items: start; }
+.studio-project-body .production-item { min-width: 0; margin-top: 0; }
+.studio-project-body .production-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.studio-project-agent { display: grid; gap: 10px; min-width: 0; }
+.studio-assistant-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; font-size: 13px; min-width: 0; }
+.studio-assistant-card h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 15px; }
+.studio-assistant-card p, .studio-assistant-card ol { margin: 0; }
+.studio-assistant-card label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; min-width: 0; }
+.studio-assistant-card :is(select, textarea) { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 7px; color: var(--ink); background: var(--surface); }
+.studio-assistant-card textarea { resize: vertical; }
+.studio-assistant-card summary { cursor: pointer; font-weight: 600; }
+.studio-assistant-card a { color: var(--accent); text-decoration: underline; }
+.studio-assistant-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-assistant-actions button, .production-shots li button { min-height: 34px; background: var(--tint); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); padding: 5px 8px; font-weight: 600; font-size: 12px; }
+.studio-assistant-actions button:disabled { opacity: .5; }
+.production-shots li[data-selected="true"] { outline: 1px solid var(--accent); }
+.production-shots li button[aria-pressed="true"] { border-color: var(--accent); }
+.studio-result-option { display: grid; gap: 5px; padding: 8px; background: var(--tint); border: 1px solid var(--line); border-radius: 8px; }
+.studio-result-option small, .studio-run-progress small { color: var(--muted); }
+.studio-run-progress { padding-left: 1.35em; }
+.studio-run-progress li { padding: 1px 0; }
+.studio-run-progress li[aria-current="step"] { font-weight: 700; }
+.studio-handoff { margin-left: 6px; }
+.studio-handoff pre { margin: 5px 0; padding: 5px; max-height: 20rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.studio-layout-preview { position: relative; display: block; width: min(100%, 210px); max-height: 240px; margin: 4px auto; overflow: hidden; border-radius: 6px; background: #242331; color: white; }
+.studio-layout-preview[data-ratio="9:16"] { width: min(100%, 135px); }
+.studio-layout-picture { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.studio-layout-guides { position: absolute; inset: 10% 11% 14% 8%; border: 1px dashed #fff9; pointer-events: none; }
+.studio-layout-preview figcaption { position: absolute; margin-inline: 10% 14%; inset-inline: 0; text-align: center; padding: 3px; background: #101018df; font-weight: 650; font-size: 11px; }
+.studio-layout-preview figcaption[data-placement="top"] { top: 14%; }
+.studio-layout-preview figcaption[data-placement="middle"] { top: 50%; transform: translateY(-50%); }
+.studio-layout-preview figcaption[data-placement="lower"] { bottom: 18%; }
+
+@media (max-width: 900px) { .studio-project-body-agent { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 630px) {
+  .studio-project-grid { grid-template-columns: minmax(0, 1fr); }
+  .studio-project-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-project-list h3 { grid-column: 1 / -1; }
+  .studio-project-body .production-fields { grid-template-columns: minmax(0, 1fr); }
+}
+
 .content-studio-bar {
   display: flex;
   align-items: center;

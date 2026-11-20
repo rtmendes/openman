@@ -99,7 +99,7 @@ export type Brief = {
 
 export function makePrompt(brief: Brief, index: number) {
   const stage = stages[index];
-  const targetRuntime = runtimes.find(({ value }) => value && Number(value) === brief.runtimeSeconds);
+  const targetRuntime = brief.runtimeSeconds ? runtimes.find(({ value }) => Number(value) === brief.runtimeSeconds)?.label ?? `${brief.runtimeSeconds} seconds` : undefined;
   return [
     "# " + stage.title,
     "## Content brief",
@@ -108,7 +108,7 @@ export function makePrompt(brief: Brief, index: number) {
     "- Language: " + brief.language.trim(),
     "- Format: " + brief.format,
     "- Platforms: " + brief.platforms.join(", "),
-    "- Target runtime: " + (targetRuntime?.label ?? "Recommend a runtime for the format and platforms"),
+    "- Target runtime: " + (targetRuntime ?? "Recommend a runtime for the format and platforms"),
     ...(brief.brandContext ? ["", "## Read-only brand context", brief.brandContext] : []),
     ...(brief.notes.trim() ? ["", "## Source material and constraints", brief.notes.trim()] : []),
     "",

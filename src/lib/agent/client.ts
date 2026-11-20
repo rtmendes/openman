@@ -3,6 +3,7 @@
 /** Browser-side client for the task API. The `api` builder owns the implementation; signatures are fixed. */
 import type { AgentEvent, ComputerView, CreateTaskInput, Interaction, TaskAttachment, TaskSummary } from "./types";
 import type { StudioMedia } from "@/lib/studio/media-types";
+import type { ChangeStudioRun, StartStudioRun, StudioRun } from "@/lib/studio/runs";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -30,6 +31,20 @@ export async function saveStudioDrafts(expectedRevision: number, items: unknown[
   if (response.status === 409) return null;
   return j<{ revision: number; savedAt: string }>(response);
 }
+
+async function studioRunRequest<T>(url: string, method = "GET", body?: StartStudioRun | ChangeStudioRun) {
+  const response = await fetch(url, { method, cache: "no-store", headers: { "Content-Type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}) });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(detail?.error ?? "Studio could not reach the workflow service.");
+  }
+  return response.json() as Promise<T>;
+}
+
+export const listStudioRuns = (videoId: string) => studioRunRequest<{ runs: StudioRun[] }>(`/api/studio/runs?videoId=${encodeURIComponent(videoId)}`);
+export const startStudioRun = (input: StartStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "POST", input);
+export const decideStudioRun = (input: ChangeStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "PATCH", input);
 
 export const studioMediaUrl = (id: string, download = false) => `/api/studio/media?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;
 export async function uploadStudioMedia(file: File): Promise<StudioMedia> {
