@@ -25,12 +25,14 @@ import { canEditProject, deleteProjectFile, leaveProject, listProjectFiles, proj
 import { taskHref, taskTime } from "../task-list";
 import { TaskMenu } from "../task-menu";
 import { useTasksStore, type SidebarTask } from "../tasks-store";
+import { MarkdownPreview } from "./markdown-preview";
 
 const CARD = "rounded-[16px] border border-[var(--om-border)] bg-[var(--om-card)]";
 const OUTLINE_BUTTON =
   "inline-flex h-[32px] shrink-0 cursor-pointer items-center justify-center gap-[6px] rounded-[8px] border border-[var(--om-border-strong)] px-[10px] text-[14px] font-medium leading-[20px] text-[var(--om-text-1)] outline-none transition-colors hover:bg-[var(--om-fill-subtle)] focus-visible:bg-[var(--om-fill-subtle)] disabled:cursor-default disabled:opacity-50";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MARKDOWN_FILE = /\.(md|markdown)$/i;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -56,14 +58,16 @@ function useProjectFiles(projectId: string) {
     list.filter((f) => f.size > MAX_FILE_BYTES).forEach((f) => toast(`“${f.name}” is larger than 2 MB`, "error"));
     if (ok.length === 0) return;
     setUploading((n) => n + ok.length);
-    await Promise.all(
-      ok.map((file) =>
-        uploadProjectFile(projectId, file)
-          .then((added) => setFiles((prev) => [added, ...(prev ?? [])]))
-          .catch((err: unknown) => toast(err instanceof Error ? err.message : "Upload failed", "error"))
-          .finally(() => setUploading((n) => n - 1)),
-      ),
-    );
+    for (const file of ok) {
+      try {
+        const added = await uploadProjectFile(projectId, file);
+        setFiles((prev) => [added, ...(prev ?? [])]);
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Upload failed", "error");
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
   };
   const remove = async (file: ProjectFile) => {
     setFiles((prev) => (prev ?? []).filter((f) => f.id !== file.id));
@@ -233,6 +237,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const manusInput = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<ProjectFile | null>(null);
   const created = params.get("created") === "1";
   const closeCreated = () => router.replace(pathname, { scroll: false });
 
@@ -359,23 +365,46 @@ export function ProjectView({ projectId }: { projectId: string }) {
                 {files.map((file) => (
                   <li key={file.id} className="group/file flex h-[36px] items-center gap-[8px] rounded-[8px] px-[6px] hover:bg-[var(--om-fill-subtle)]">
                     <FileText size={16} strokeWidth={1.7} className="shrink-0 text-[var(--om-icon-2)]" />
-                    <span className="min-w-0 flex-1 truncate text-[14px] leading-[20px]">{file.name}</span>
-                    <span className="shrink-0 text-[12px] text-[var(--om-text-3)] group-hover/file:hidden">{formatSize(file.size)}</span>
-                    <a href={projectFileUrl(projectId, file.id)} aria-label={`Download ${file.name}`} className="hidden size-[24px] items-center justify-center rounded-[6px] text-[var(--om-icon-2)] hover:bg-[var(--om-fill)] group-hover/file:flex">
+                    {MARKDOWN_FILE.test(file.name) ? (
+                      <button type="button" title={file.name} onClick={() => setPreview(file)} className="min-w-0 flex-1 truncate text-left text-[14px] leading-[20px] underline-offset-2 hover:underline">{file.name}</button>
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate text-[14px] leading-[20px]">{file.name}</span>
+                    )}
+                    <span className="shrink-0 text-[12px] text-[var(--om-text-3)]">{formatSize(file.size)}</span>
+                    <a href={projectFileUrl(projectId, file.id)} aria-label={`Download ${file.name}`} className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-[var(--om-icon-2)] hover:bg-[var(--om-fill)]">
                       <Download size={14} />
                     </a>
-                    <button type="button" aria-label={`Delete ${file.name}`} onClick={() => void remove(file)} className={cn("hidden size-[24px] cursor-pointer items-center justify-center rounded-[6px] text-[var(--om-icon-2)] hover:bg-[var(--om-fill)]", editable && "group-hover/file:flex")}>
+                    {editable ? <button type="button" aria-label={`Delete ${file.name}`} onClick={() => void remove(file)} className="flex size-[28px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-[var(--om-icon-2)] hover:bg-[var(--om-fill)]">
                       <Trash2 size={14} />
-                    </button>
+                    </button> : null}
                   </li>
                 ))}
               </ul>
             ) : null}
-            <div className={editable ? undefined : "hidden"}>
+            <div className={editable ? "flex flex-wrap gap-2" : "hidden"}>
               <button type="button" disabled={uploading > 0} onClick={() => fileInput.current?.click()} className={OUTLINE_BUTTON}>
                 <Upload size={15} strokeWidth={1.8} />
-                {uploading > 0 ? "Uploading…" : "Upload"}
+                {uploading > 0 ? "Uploading…" : "Upload files"}
               </button>
+              <button type="button" disabled={uploading > 0} onClick={() => manusInput.current?.click()} className={OUTLINE_BUTTON}>
+                <FileText size={15} />
+                Import Manus Markdown
+              </button>
+              <input
+                ref={manusInput}
+                type="file"
+                accept=".md,.markdown,text/markdown"
+                multiple
+                hidden
+                aria-label="Import Manus Markdown files"
+                onChange={(event) => {
+                  const selected = Array.from(event.currentTarget.files ?? []);
+                  event.currentTarget.value = "";
+                  const markdown = selected.filter((file) => MARKDOWN_FILE.test(file.name));
+                  if (markdown.length !== selected.length) toast("Choose .md or .markdown files from Manus.", "error");
+                  void upload(markdown);
+                }}
+              />
               <input
                 ref={fileInput}
                 type="file"
@@ -393,6 +422,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
         </aside>
       </div>
 
+      {preview ? <MarkdownPreview key={preview.id} projectId={projectId} file={preview} onClose={() => setPreview(null)} /> : null}
       {sharing ? <ShareProjectModal project={project} onClose={() => setSharing(false)} /> : null}
       {editing ? <InstructionsDialog project={project} onClose={() => setEditing(false)} /> : null}
       {created ? <CreatedDialog project={project} onClose={closeCreated} onUpload={upload} /> : null}

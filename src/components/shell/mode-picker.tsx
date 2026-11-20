@@ -151,6 +151,17 @@ export function ModePicker({ className }: { className?: string }) {
             <FlexItem selected={mode === "flex"} onSelect={setMode} manageUrl={modelKey.manageUrl} />
           </>
         ) : null}
+        {modelKey && !flexReal ? (
+          <>
+            <MenuSeparator className={MODE_DIVIDER} />
+            {modelKey.model ? <MenuLabel className="break-all px-[12px] py-[4px] text-[12px]">Home computer model: {modelKey.model}</MenuLabel> : null}
+            <MenuItem asChild className="gap-2 ps-[12px]">
+              <a href={modelKey.manageUrl} target="_blank" rel="noreferrer">
+                Manage Anthropic key in Orgo <ArrowUpRight size={14} aria-hidden="true" />
+              </a>
+            </MenuItem>
+          </>
+        ) : null}
         {mode === "max" ? (
           <>
             <OptionSection label="Effort" value={effort} options={EFFORTS} onChange={setEffort} />

@@ -18,9 +18,9 @@ function hostOf(url: string): string {
 }
 
 export const brand = {
-  name: "OpenMan",
-  wordmark: "openman",
-  agentNoun: "OpenMan",
+  name: "Mahara",
+  wordmark: "mahara",
+  agentNoun: "Mahara",
   /** Public origin of this deployment, without a trailing slash. */
   url: publicUrl,
   /** Host name of `url`. */
@@ -31,9 +31,9 @@ export const brand = {
   logoMark: "/brand/logo-mark.svg",
   logoWord: "/brand/logo-word.svg",
   modes: {
-    max: { label: "OpenMan Max", description: "Our strongest model, for long, multi-step work." },
-    standard: { label: "OpenMan", description: "The balanced default for most jobs." },
-    lite: { label: "OpenMan Lite", description: "Quick and light, for small everyday jobs." },
+    max: { label: "Mahara Max", description: "Our strongest model, for long, multi-step work." },
+    standard: { label: "Mahara", description: "The balanced default for most jobs." },
+    lite: { label: "Mahara Lite", description: "Quick and light, for small everyday jobs." },
     flex: { label: "Your own key", description: "Runs on the model API key you bring." },
   },
 } as const;

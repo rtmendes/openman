@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: `${brand.name}: an agent with a computer of its own`,
   description: `${brand.name} is an open-source AI agent that browses, writes code, builds files and runs jobs on its own cloud computer, so you get finished work instead of instructions.`,
   applicationName: brand.name,
+  icons: { apple: "/brand/app-192.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
