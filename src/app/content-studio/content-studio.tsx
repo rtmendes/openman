@@ -7,13 +7,21 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
+import { getSecondSpringContext } from "@/lib/agent/client";
 import { examples, formats, makePrompt, platforms, runtimes, stages, type Brief } from "./workflow";
 import { WorkflowRunner } from "./workflow-runner";
 import "./studio.css";
 
 const icons = [Settings2, Search, Image, ListVideo, Film, Smartphone, FileText];
 
-export function ContentStudio() {
+const script = [
+  ["0–5s", "Hold the TV remote up to your cheek.", "Hi, yes. I’d like to report a missing phone."],
+  ["5–13s", "Wide shot. Your phone glows on the counter.", "I walked into the kitchen for my phone. Then I forgot why I was there and made toast."],
+  ["13–23s", "Friend points at your phone. Slowly lower the remote.", "Oh. Well, at least somebody in this house knows what channel we’re on."],
+  ["23–30s", "Take a bite of toast. Look straight at camera.", "If you’ve ever gone looking for one thing and come back with a snack, come sit by me."],
+];
+
+export function ContentStudio({ canLoadBrand = false }: { canLoadBrand?: boolean }) {
   const [brief, setBrief] = useState<Brief>({
     topic: "GTA 6",
     audience: "",
@@ -24,6 +32,9 @@ export function ContentStudio() {
   });
   const [active, setActive] = useState(stages.length - 1);
   const [feedback, setFeedback] = useState("");
+  const [brandLoading, setBrandLoading] = useState(false);
+  const [brandError, setBrandError] = useState("");
+  const [showScript, setShowScript] = useState(false);
   const stage = stages[active];
   const ready = Boolean(brief.topic.trim() && brief.language.trim() && brief.platforms.length);
   const prompt = ready ? makePrompt(brief, active) : "";
@@ -31,6 +42,32 @@ export function ContentStudio() {
   function update<K extends keyof Brief>(key: K, value: Brief[K]) {
     setBrief((current) => ({ ...current, [key]: value }));
     setFeedback("");
+  }
+
+  async function loadSecondSpring() {
+    setBrandLoading(true);
+    setBrandError("");
+    try {
+      const { registry, commandCenter, kits, assets } = await getSecondSpringContext();
+      const context = [
+        registry.voiceRules ? "Registry voice: " + registry.voiceRules : "",
+        commandCenter.channels?.length ? "Command Center channels: " + commandCenter.channels.join(", ") : "",
+        ...kits.flatMap((kit) => [kit.tone ? "Brand kit tone: " + kit.tone : "", ...(kit.do ?? []).map((rule) => "Do: " + rule), ...(kit["don’t"] ?? []).map((rule) => "Avoid: " + rule)]),
+        assets.length ? "Brand asset references: " + assets.map(({ name, type }) => `${name} (${type})`).join(", ") : "",
+      ].filter(Boolean).join("\n");
+      setBrief((current) => ({
+        ...current, topic: registry.name, audience: registry.audience ?? current.audience,
+        format: "Comedy skit", runtimeSeconds: 30, platforms: ["Instagram", "TikTok"],
+        brandContext: context,
+      }));
+      setActive(stages.length - 1);
+      setShowScript(false);
+      setFeedback("");
+    } catch {
+      setBrandError("Could not load Second Spring. Check your owner session and try again.");
+    } finally {
+      setBrandLoading(false);
+    }
   }
 
   async function copy() {
@@ -103,6 +140,30 @@ export function ContentStudio() {
               ))}
             </div>
           </section>
+
+          {canLoadBrand && <section className="content-studio-pipeline" aria-labelledby="studio-brand">
+            <div className="content-studio-pipelineHeader">
+              <div>
+                <h2 id="studio-brand">Brand context</h2>
+                <p>{brief.brandContext ? "Second Spring loaded from the registry, Command Center, brand kit and asset library." : "Load Second Spring’s read-only context into your brief."}</p>
+              </div>
+              <button type="button" className="content-studio-runButton" disabled={brandLoading} onClick={loadSecondSpring}>
+                {brandLoading ? "Loading…" : brief.brandContext ? "Refresh Second Spring" : "Load Second Spring"}
+              </button>
+            </div>
+            {brandError && <p role="alert">{brandError}</p>}
+            {brief.brandContext && <div className="content-studio-runState">
+              <div className="content-studio-runActions">
+                <button type="button" onClick={() => setShowScript((visible) => !visible)} aria-expanded={showScript}>{showScript ? "Hide" : "Preview"} 30-second sample</button>
+                <button type="button" onClick={() => { update("brandContext", undefined); setShowScript(false); }}>Remove brand context</button>
+              </div>
+              {showScript && <div className="content-studio-stageReview">
+                <h3>I’d Like to Report a Missing Phone</h3>
+                <p>Sample comedy skit · Estimated 30 seconds</p>
+                <ol>{script.map(([time, action, line]) => <li key={time}><strong>{time}</strong> · {action} <q>{line}</q></li>)}</ol>
+              </div>}
+            </div>}
+          </section>}
 
           <WorkflowRunner brief={brief} ready={ready} />
 
@@ -191,4 +252,3 @@ export function ContentStudio() {
     </main>
   );
 }
-

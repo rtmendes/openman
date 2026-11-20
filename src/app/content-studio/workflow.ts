@@ -94,6 +94,7 @@ export type Brief = {
   platforms: Platform[];
   notes: string;
   runtimeSeconds?: number;
+  brandContext?: string;
 };
 
 export function makePrompt(brief: Brief, index: number) {
@@ -108,6 +109,7 @@ export function makePrompt(brief: Brief, index: number) {
     "- Format: " + brief.format,
     "- Platforms: " + brief.platforms.join(", "),
     "- Target runtime: " + (targetRuntime?.label ?? "Recommend a runtime for the format and platforms"),
+    ...(brief.brandContext ? ["", "## Read-only brand context", brief.brandContext] : []),
     ...(brief.notes.trim() ? ["", "## Source material and constraints", brief.notes.trim()] : []),
     "",
     "## Task",

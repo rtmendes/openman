@@ -5,6 +5,15 @@ import type { AgentEvent, ComputerView, CreateTaskInput, Interaction, TaskAttach
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
+export interface StudioBrandContext {
+  registry: { name: string; audience: string | null; voiceRules: string | null };
+  commandCenter: { channels: string[] | null };
+  kits: { tone: string | null; do: string[] | null; "don’t": string[] | null }[];
+  assets: { name: string; type: string }[];
+}
+
+export const getSecondSpringContext = () => fetch("/api/admin/second-spring", { cache: "no-store" }).then((r) => j<StudioBrandContext>(r));
+
 export const listTasks = () => fetch("/api/tasks").then((r) => j<{ tasks: TaskSummary[] }>(r));
 export const getTask = (id: string) => fetch(`/api/tasks/${id}`).then((r) => j<{ task: TaskSummary; events: AgentEvent[] }>(r));
 export const createTask = (input: CreateTaskInput) => fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }).then((r) => j<{ task: TaskSummary }>(r));
