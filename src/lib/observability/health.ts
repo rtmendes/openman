@@ -70,7 +70,11 @@ export async function signInStartsThisHour(): Promise<number | null> {
 
 export async function deepHealth(): Promise<DeepHealth> {
   const at = new Date().toISOString();
-  const required = Object.fromEntries(REQUIRED.map((n) => [n, present(n)]));
+  const shared = process.env.APP_DB_SCHEMA === "mahara";
+  const requiredNames = shared
+    ? [...REQUIRED.filter((name) => name !== "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), "APP_DB_API_KEY", "APP_DB_ACCESS_TOKEN"]
+    : REQUIRED;
+  const required = Object.fromEntries(requiredNames.map((n) => [n, present(n)]));
   const optional = Object.fromEntries(OPTIONAL.map((n) => [n, present(n)]));
 
   // Database reachable, and the gate working: the server header gets a row; an anonymous client gets none.
@@ -86,8 +90,12 @@ export async function deepHealth(): Promise<DeepHealth> {
     }
     try {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-      const res = await fetch(`${url}/rest/v1/accounts?select=user_id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(4000), cache: "no-store" });
+      const key = process.env.APP_DB_API_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+      const res = await fetch(`${url}/rest/v1/accounts?select=user_id&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Accept-Profile": process.env.APP_DB_SCHEMA || "public" },
+        signal: AbortSignal.timeout(4000),
+        cache: "no-store",
+      });
       const rows = res.ok ? ((await res.json()) as unknown[]) : [];
       gate = res.ok && rows.length === 0 ? { state: "ok", detail: "anonymous read returns no rows" } : !res.ok ? { state: "ok", detail: `anonymous read refused (${res.status})` } : { state: "fail", detail: "anonymous read returned rows" };
     } catch {
