@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { examples, formats, makePrompt, platforms, stages, type Brief } from "./workflow";
@@ -21,7 +21,7 @@ export function ContentStudio() {
     platforms: [...platforms],
     notes: "",
   });
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(stages.length - 1);
   const [feedback, setFeedback] = useState("");
   const stage = stages[active];
   const ready = Boolean(brief.topic.trim() && brief.language.trim() && brief.platforms.length);
@@ -58,7 +58,7 @@ export function ContentStudio() {
   const StageIcon = icons[active];
 
   return (
-    <main className={`dark ${styles.studio}`}>
+    <main className={styles.studio}>
       <header className={styles.bar}>
         <h1 className={styles.wordmark}><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
         <Link href="/" className={styles.back}><ArrowLeft size={15} aria-hidden /> Home</Link>
@@ -87,7 +87,9 @@ export function ContentStudio() {
         </nav>
 
         <div className={styles.main}>
-          <section className={styles.topic} aria-label="Project topic">
+          <section className={styles.topic} aria-labelledby="topic-heading">
+            <div className={styles.heroArt} aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
+            <h2 id="topic-heading">What are you creating?</h2>
             <label htmlFor="studio-topic">Niche or topic</label>
             <div className={styles.topicField}>
               <Hash size={25} aria-hidden />
@@ -104,11 +106,11 @@ export function ContentStudio() {
           <div className={styles.editor}>
             <section className={styles.document} aria-labelledby="output-heading">
               <div className={styles.documentHead}>
-                <div className={styles.documentLabel}><StageIcon size={17} aria-hidden /> Agent brief</div>
+                <div className={styles.documentLabel}><StageIcon size={17} aria-hidden /> Your brief</div>
                 {ready && (
                   <div className={styles.tools}>
                     <button type="button" onClick={copy}><Copy size={15} aria-hidden /> Copy</button>
-                    <button type="button" onClick={download}><Download size={15} aria-hidden /> Download</button>
+                    <button type="button" onClick={download}><Download size={15} aria-hidden /> Export</button>
                     <button type="button" className={styles.primary} onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={15} aria-hidden /> Open in agent</button>
                   </div>
                 )}
@@ -122,16 +124,17 @@ export function ContentStudio() {
                     <ul className={styles.context}>
                       <li>{brief.topic.trim()}</li>
                       <li>{brief.format}</li>
+                      {brief.platforms.map((platform) => <li key={platform}>{platform}</li>)}
                       <li><Globe2 size={13} aria-hidden /> {brief.language.trim()}</li>
                     </ul>
-                    <h3>Instructions</h3>
-                    <ol className={styles.instructions}>{stage.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
+                    <details className={styles.raw}><summary>Workflow instructions <ChevronDown size={14} aria-hidden /></summary>
+                    <ol className={styles.instructions}>{stage.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
                     <div className={styles.deliverables}>
                       <FileText size={17} aria-hidden />
                       <div><h3>Expected output</h3><p>{stage.output}</p></div>
                     </div>
                     <details className={styles.raw}>
-                      <summary>View full prompt</summary>
+                      <summary>View full prompt <ChevronDown size={14} aria-hidden /></summary>
                       <pre>{prompt}</pre>
                     </details>
                   </div>
@@ -142,7 +145,7 @@ export function ContentStudio() {
             </section>
 
             <aside className={styles.settings} aria-labelledby="brief-heading">
-              <h2 id="brief-heading"><Settings2 size={16} aria-hidden /> Brief settings</h2>
+              <h2 id="brief-heading"><Settings2 size={16} aria-hidden /> Personalize</h2>
               <div className={styles.fields}>
                 <label>Audience
                   <input value={brief.audience} onChange={(event) => update("audience", event.target.value)} maxLength={300} placeholder="e.g. First-time creators" />
@@ -180,3 +183,4 @@ export function ContentStudio() {
     </main>
   );
 }
+
