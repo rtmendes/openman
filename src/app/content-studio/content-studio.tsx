@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { examples, formats, makePrompt, platforms, stages, type Brief } from "./workflow";
@@ -37,7 +37,7 @@ export function ContentStudio() {
       await navigator.clipboard.writeText(prompt);
       setFeedback("Agent brief copied.");
     } catch {
-      setFeedback("Clipboard unavailable. Select the text in the agent brief to copy it.");
+      setFeedback("Clipboard unavailable. Open “View full prompt” to copy the text.");
     }
   }
 
@@ -50,38 +50,103 @@ export function ContentStudio() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function selectStep(index: number) {
+    setActive(index);
+    setFeedback("");
+  }
+
+  const StageIcon = icons[active];
+
   return (
     <main className={`dark ${styles.studio}`}>
       <header className={styles.bar}>
-        <span className={styles.wordmark}><Clapperboard size={19} aria-hidden /> Content Studio</span>
-        <Link href="/" className={styles.back}><ArrowLeft size={16} aria-hidden /> Home</Link>
+        <h1 className={styles.wordmark}><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
+        <Link href="/" className={styles.back}><ArrowLeft size={15} aria-hidden /> Home</Link>
       </header>
 
       <div className={styles.workspace}>
-        <section className={styles.hero}>
-          <div>
-            <h1>Create content for <em>any niche.</em></h1>
-            <p>Find what works, plan your edits, and turn an idea into your next video.</p>
-          </div>
-          <Clapperboard className={styles.heroArt} aria-hidden />
-        </section>
+        <nav className={styles.rail} aria-labelledby="workflow-heading">
+          <h2 id="workflow-heading">Workflow</h2>
+          <ol className={styles.steps}>
+            {stages.map((item, index) => {
+              const Icon = icons[index];
+              return (
+                <li key={item.title}>
+                  <button type="button" aria-current={active === index ? "step" : undefined} onClick={() => selectStep(index)}>
+                    <Icon size={17} aria-hidden />
+                    <span>{item.title}</span>
+                    {active === index && <ArrowRight size={15} aria-hidden />}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <select className={styles.stepSelect} aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
+            {stages.map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}
+          </select>
+        </nav>
 
-        <div className={styles.grid}>
-          <section className={styles.panel} aria-labelledby="brief-heading">
-            <h2 id="brief-heading">Content brief</h2>
-            <div className={styles.fields}>
-              <label>Niche or topic
-                <input value={brief.topic} onChange={(event) => update("topic", event.target.value)} maxLength={200} required />
-              </label>
-              <div className={styles.options} aria-label="Example topics" role="group">
-                {examples.map((topic) => (
-                  <button key={topic} type="button" aria-pressed={brief.topic === topic} onClick={() => update("topic", topic)}>{topic}</button>
-                ))}
+        <div className={styles.main}>
+          <section className={styles.topic} aria-label="Project topic">
+            <label htmlFor="studio-topic">Niche or topic</label>
+            <div className={styles.topicField}>
+              <Hash size={25} aria-hidden />
+              <input id="studio-topic" value={brief.topic} onChange={(event) => update("topic", event.target.value)} placeholder="Enter any topic" maxLength={200} required />
+            </div>
+            <div className={styles.examples} aria-label="Example topics" role="group">
+              <span>Try</span>
+              {examples.filter((topic) => topic !== brief.topic).map((topic) => (
+                <button key={topic} type="button" onClick={() => update("topic", topic)}>{topic}</button>
+              ))}
+            </div>
+          </section>
+
+          <div className={styles.editor}>
+            <section className={styles.document} aria-labelledby="output-heading">
+              <div className={styles.documentHead}>
+                <div className={styles.documentLabel}><StageIcon size={17} aria-hidden /> Agent brief</div>
+                {ready && (
+                  <div className={styles.tools}>
+                    <button type="button" onClick={copy}><Copy size={15} aria-hidden /> Copy</button>
+                    <button type="button" onClick={download}><Download size={15} aria-hidden /> Download</button>
+                    <button type="button" className={styles.primary} onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={15} aria-hidden /> Open in agent</button>
+                  </div>
+                )}
               </div>
-              <label>Audience
-                <input value={brief.audience} onChange={(event) => update("audience", event.target.value)} maxLength={300} placeholder="e.g. Beginners who want practical tips" />
-              </label>
-              <div className={styles.pair}>
+
+              <div className={styles.paper}>
+                <h2 id="output-heading">{stage.title}</h2>
+                <p className={styles.description}>{stage.description}</p>
+                {ready ? (
+                  <div aria-label="Generated agent brief">
+                    <ul className={styles.context}>
+                      <li>{brief.topic.trim()}</li>
+                      <li>{brief.format}</li>
+                      <li><Globe2 size={13} aria-hidden /> {brief.language.trim()}</li>
+                    </ul>
+                    <h3>Instructions</h3>
+                    <ol className={styles.instructions}>{stage.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
+                    <div className={styles.deliverables}>
+                      <FileText size={17} aria-hidden />
+                      <div><h3>Expected output</h3><p>{stage.output}</p></div>
+                    </div>
+                    <details className={styles.raw}>
+                      <summary>View full prompt</summary>
+                      <pre>{prompt}</pre>
+                    </details>
+                  </div>
+                ) : <p className={styles.empty}>Enter a topic and language, and select a platform to build your brief.</p>}
+              </div>
+
+              <p className={styles.feedback} role="status">{feedback}</p>
+            </section>
+
+            <aside className={styles.settings} aria-labelledby="brief-heading">
+              <h2 id="brief-heading"><Settings2 size={16} aria-hidden /> Brief settings</h2>
+              <div className={styles.fields}>
+                <label>Audience
+                  <input value={brief.audience} onChange={(event) => update("audience", event.target.value)} maxLength={300} placeholder="e.g. First-time creators" />
+                </label>
                 <label>Format
                   <select value={brief.format} onChange={(event) => update("format", event.target.value)}>
                     {formats.map((format) => <option key={format}>{format}</option>)}
@@ -90,53 +155,27 @@ export function ContentStudio() {
                 <label>Language
                   <input value={brief.language} onChange={(event) => update("language", event.target.value)} maxLength={80} required />
                 </label>
+                <fieldset>
+                  <legend>Platforms</legend>
+                  <div className={styles.platforms}>
+                    {platforms.map((platform) => {
+                      const selected = brief.platforms.includes(platform);
+                      return (
+                        <label key={platform}>
+                          <input type="checkbox" checked={selected} onChange={() => update("platforms", platforms.filter((item) => item === platform ? !selected : brief.platforms.includes(item)))} />
+                          {platform}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <label>References &amp; constraints
+                  <textarea value={brief.notes} onChange={(event) => update("notes", event.target.value)} rows={3} maxLength={4000} placeholder="Links, footage notes, or topics to skip" />
+                </label>
               </div>
-              <fieldset>
-                <legend>Platforms</legend>
-                <div className={styles.options}>
-                  {platforms.map((platform) => {
-                    const selected = brief.platforms.includes(platform);
-                    return <button key={platform} type="button" aria-pressed={selected} onClick={() => update("platforms", platforms.filter((item) => item === platform ? !selected : brief.platforms.includes(item)))}>{platform}</button>;
-                  })}
-                </div>
-              </fieldset>
-              <label>Source material and constraints
-                <textarea value={brief.notes} onChange={(event) => update("notes", event.target.value)} rows={3} maxLength={4000} placeholder="Add reference links, footage notes, or topics to skip." />
-              </label>
-            </div>
-          </section>
-
-          <section className={styles.panel} aria-labelledby="workflow-heading">
-            <h2 id="workflow-heading">Workflow</h2>
-            <ol className={styles.steps}>
-              {stages.map((item, index) => {
-                const Icon = icons[index];
-                return (
-                  <li key={item.title}>
-                    <button type="button" aria-current={active === index ? "step" : undefined} onClick={() => { setActive(index); setFeedback(""); }}>
-                      <span className={styles.stepIcon}><Icon size={18} aria-hidden /></span>
-                      <span><strong>{index + 1}. {item.title}</strong><small>{item.description}</small></span>
-                      <ArrowRight className={styles.stepArrow} size={16} aria-hidden />
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        </div>
-
-        <section className={styles.panel} aria-labelledby="output-heading">
-          <div className={styles.outputHeader}>
-            <div><h2 id="output-heading">Agent brief</h2><p>{stage.title} · {stage.output}</p></div>
-            {ready && <div className={styles.actions}>
-              <button type="button" onClick={copy}><Copy size={16} aria-hidden /> Copy</button>
-              <button type="button" onClick={download}><Download size={16} aria-hidden /> Download</button>
-              <button type="button" className={styles.primary} onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={16} aria-hidden /> Open in agent</button>
-            </div>}
+            </aside>
           </div>
-          {ready ? <textarea className={styles.preview} aria-label="Generated agent brief" readOnly value={prompt} rows={11} /> : <p>Enter a topic and language, and select at least one platform.</p>}
-          <p className={styles.feedback} role="status">{feedback}</p>
-        </section>
+        </div>
       </div>
     </main>
   );
