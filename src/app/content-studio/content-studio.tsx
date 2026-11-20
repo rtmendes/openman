@@ -2,9 +2,9 @@
 // Copyright (c) 2026 Organic Intelligence, Inc.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play, Moon, Sun } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { getSecondSpringContext } from "@/lib/agent/client";
@@ -23,7 +23,7 @@ const script = [
   ["23–30s", "Take a bite of toast. Look straight at camera.", "If you’ve ever gone looking for one thing and come back with a snack, come sit by me."],
 ];
 
-export function ContentStudio({ canLoadBrand = false, signedIn = false }: { canLoadBrand?: boolean; signedIn?: boolean }) {
+export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey }: { canLoadBrand?: boolean; signedIn?: boolean; draftKey?: string }) {
   const [brief, setBrief] = useState<Brief>({
     topic: "GTA 6",
     audience: "",
@@ -38,6 +38,16 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false }: { canL
   const [brandError, setBrandError] = useState("");
   const [showScript, setShowScript] = useState(false);
   const [referenceIndex, setReferenceIndex] = useState(6);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      try {
+        const cached = localStorage.getItem("mahara:studio-theme");
+        setTheme(cached === "dark" || (!cached && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light");
+      } catch { /* Use the initial theme if settings storage is unavailable. */ }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const stage = stages[active];
   const ready = Boolean(brief.topic.trim() && brief.language.trim() && brief.platforms.length);
   const prompt = ready ? makePrompt(brief, active) : "";
@@ -113,10 +123,15 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false }: { canL
   const StageIcon = icons[active];
 
   return (
-    <main className="content-studio-studio">
+    <main className="content-studio-studio" data-theme={theme}>
       <header className="content-studio-bar">
         <h1 className="content-studio-wordmark"><span><Clapperboard size={17} aria-hidden /></span> Content Studio</h1>
         <nav className="production-actions" aria-label="Studio pages">
+          <button type="button" className="content-studio-back" aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={() => {
+            const next = theme === "dark" ? "light" : "dark";
+            setTheme(next);
+            try { localStorage.setItem("mahara:studio-theme", next); } catch { /* Theme works for this visit. */ }
+          }}>{theme === "dark" ? <Sun size={15} aria-hidden /> : <Moon size={15} aria-hidden />}{theme === "dark" ? "Light" : "Dark"}</button>
           {canLoadBrand && <a href="#studio-reference" className="content-studio-back"><Play size={15} aria-hidden /> Examples</a>}
           <a href="#video-production" className="content-studio-back"><Film size={15} aria-hidden /> Video production</a>
           <Link href="/" className="content-studio-back"><ArrowLeft size={15} aria-hidden /> Home</Link>
@@ -147,7 +162,8 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false }: { canL
 
         <div className="content-studio-main">
           {canLoadBrand && <ReferenceLibrary selected={referenceIndex} onSelect={setReferenceIndex} onOpen={openExampleWorkflow} />}
-          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} onExample={canLoadBrand ? () => seeExample(stages.length) : undefined} />
+          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} draftKey={draftKey}
+            onExample={canLoadBrand ? () => seeExample(stages.length) : undefined} />
           <section className="content-studio-topic" aria-labelledby="topic-heading">
             <div className="content-studio-heroArt" aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
             <h2 id="topic-heading">What are you creating?</h2>

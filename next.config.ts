@@ -3,6 +3,13 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
+const studioStorageOrigin = (() => {
+  if (process.env.APP_DB_SCHEMA !== "mahara") return "";
+  try {
+    const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+    return url.protocol === "https:" ? ` ${url.origin}` : "";
+  } catch { return ""; }
+})();
 
 /**
  * Security headers for every response (see docs/security-model.md). Set here rather than in the proxy: with
@@ -24,7 +31,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' data: blob: https:",
-  `connect-src 'self' https://www.orgo.ai wss://www.orgo.ai wss://*.orgo.ai https://api.elevenlabs.io wss://api.elevenlabs.io${isDev ? " ws: http://localhost:* http://127.0.0.1:*" : ""}`,
+  `connect-src 'self' https://www.orgo.ai wss://www.orgo.ai wss://*.orgo.ai https://api.elevenlabs.io wss://api.elevenlabs.io${studioStorageOrigin}${isDev ? " ws: http://localhost:* http://127.0.0.1:*" : ""}`,
   "frame-src 'self' https://*.web.orgo.dev https://*.orgo.dev blob: data:",
   "worker-src 'self' blob:",
   "manifest-src 'self'",

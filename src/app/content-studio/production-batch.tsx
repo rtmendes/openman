@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Clapperboard, Download, Plus, X } from "lucide-react";
-import { createTask, getSecondSpringContext, getTask } from "@/lib/agent/client";
-import { brandBrief, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoSpec } from "./production";
+import { Clapperboard, CopyPlus, Download, Plus, X } from "lucide-react";
+import { createTask, getSecondSpringContext, getTask, studioMediaUrl, uploadStudioMedia } from "@/lib/agent/client";
+import type { StudioMedia } from "@/lib/studio/media-types";
+import { brandBrief, chosenFrames, frameOptions, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
+import { NarrationOptions, ReferenceInputs } from "./production-inputs";
+import { useStudioDrafts } from "./use-studio-drafts";
 
 type Item = {
   spec: VideoSpec;
@@ -17,6 +20,8 @@ type Item = {
   error?: string;
   context?: string;
   stale?: boolean;
+  variationOf?: string;
+  renders?: StudioMedia[];
 };
 
 const storageKey = "mahara:video-production:v1";
@@ -28,38 +33,43 @@ function blank(): Item {
 
 const sampleShape = '{"title":"My video","caption":"Social caption","shots":[{"end":5,"narration":"Opening line","visual":"Describe the shot","overlay":"Opening text","sound":"Sound cue","asset":"Footage to record"}]}';
 
-export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoadBrand: boolean; signedIn: boolean; onExample?: () => void }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample }: {
+  canLoadBrand: boolean; signedIn: boolean; draftKey?: string; onExample?: () => void;
+}) {
+  const drafts = useStudioDrafts<Item>(draftKey, storageKey + (canLoadBrand ? ":owner" : ":personal"), blank);
+  const { items, setItems, hydrated } = drafts;
   const [dispatching, setDispatching] = useState(false);
   const [notice, setNotice] = useState("");
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [connected, setConnected] = useState<{ name: string; context: string } | null>(null);
+  const [brandStatus, setBrandStatus] = useState<"checking" | "ready" | "unavailable">("checking");
+  const [version, setVersion] = useState("");
+  const [versionPending, setVersionPending] = useState(false);
   const previewUrls = useRef(new Map<string, string>());
   const dispatchLock = useRef(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      try {
-        const saved = JSON.parse(sessionStorage.getItem(storageKey + (canLoadBrand ? ":owner" : ":personal")) ?? "[]") as Item[];
-        setItems(saved.length ? saved.slice(0, limit) : [blank()]);
-      } catch {
-        setItems([blank()]);
-      }
-      setHydrated(true);
-    });
     const urls = previewUrls.current;
     return () => {
-      cancelAnimationFrame(frame);
       urls.forEach((url) => URL.revokeObjectURL(url));
       urls.clear();
     };
-  }, [canLoadBrand]);
+  }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    try { sessionStorage.setItem(storageKey + (canLoadBrand ? ":owner" : ":personal"), JSON.stringify(items)); }
-    catch { /* Private browsing may disable draft persistence. */ }
-  }, [canLoadBrand, hydrated, items]);
+    if (!canLoadBrand) return;
+    let active = true;
+    void getSecondSpringContext().then((source) => {
+      if (!active || !source.registry?.name || !source.kits.length) {
+        if (active) setBrandStatus("unavailable");
+        return;
+      }
+      setConnected({ name: source.registry.name, context: brandBrief(source) });
+      setBrandStatus("ready");
+    }).catch(() => { if (active) setBrandStatus("unavailable"); });
+    return () => { active = false; };
+  }, [canLoadBrand]);
 
   const pendingTasks = items.filter((item) => item.pending && item.taskId)
     .map(({ spec, taskId }) => [spec.id, taskId!] as const);
@@ -85,7 +95,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
     }
     void poll();
     return () => { stopped = true; clearTimeout(timer); };
-  }, [pendingKey]);
+  }, [pendingKey, setItems]);
 
   function patch(id: string, change: (item: Item) => Item) {
     setItems((rows) => rows.map((item) => item.spec.id === id ? change(item) : item));
@@ -98,15 +108,16 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
     setPreviews((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id)));
   }
 
-  function edit(id: string, values: Partial<VideoSpec>) {
+  function edit(id: string, change: Partial<VideoSpec> | ((spec: VideoSpec) => Partial<VideoSpec>)) {
     clearPreview(id);
-    patch(id, (item) => ({ ...item, spec: { ...item.spec, ...values }, approved: undefined, stale: Boolean(item.script.trim()), context: undefined, error: undefined }));
+    patch(id, (item) => ({ ...item, spec: { ...item.spec, ...(typeof change === "function" ? change(item.spec) : change) },
+      approved: undefined, stale: Boolean(item.script.trim()), context: undefined, error: undefined }));
   }
 
-  async function contextFor(item: Item, connected?: string) {
+  async function contextFor(item: Item, cached?: string) {
     if (item.kit !== "second-spring") return item.spec.customContext.trim();
     if (!canLoadBrand) throw new Error("Sign in as owner to use the connected Second Spring kit.");
-    return connected ?? brandBrief(await getSecondSpringContext());
+    return cached ?? connected?.context ?? brandBrief(await getSecondSpringContext());
   }
 
   async function generateScripts() {
@@ -148,18 +159,58 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
     }
   }
 
-  function previewFile(item: Item, file: File) {
+  async function previewFile(item: Item, file: File) {
     const id = item.spec.id;
     clearPreview(id);
     const url = URL.createObjectURL(file);
     previewUrls.current.set(id, url);
     setPreviews((current) => ({ ...current, [id]: url }));
     patch(id, (row) => ({ ...row, error: undefined }));
+    if (!draftKey) return;
+    setUploading((current) => ({ ...current, [id]: true }));
+    try {
+      const media = await uploadStudioMedia(file);
+      patch(id, (row) => ({ ...row, renders: [...(row.renders ?? []), media] }));
+    } catch {
+      patch(id, (row) => ({ ...row, error: "The preview is available in this tab. Private upload failed, so the file was not saved." }));
+    } finally { setUploading((current) => ({ ...current, [id]: false })); }
   }
 
   function writeScript(id: string, script: string) {
     clearPreview(id);
     patch(id, (row) => ({ ...row, script, approved: undefined, stale: false, error: undefined }));
+  }
+
+  function copyDraft(item: Item, keepRender: boolean): Item {
+    const { spec, kit, script, stale } = item;
+    return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id,
+      ...(keepRender ? { renders: item.renders } : {}) };
+  }
+
+  function addCopies(source: Item[], keepRender: boolean) {
+    if (!source.length || items.length + source.length > limit) {
+      setNotice("There is room for 12 videos in the active batch. Free space before opening these copies.");
+      return false;
+    }
+    const copies = source.map((item) => copyDraft(item, keepRender));
+    setItems((current) => current.length + copies.length > limit ? current : [...current, ...copies]);
+    setNotice(keepRender ? "Saved revision opened as editable copies." : "Variation added. The original is still in your batch.");
+    return true;
+  }
+
+  async function openVersion() {
+    if (!version) return;
+    setVersionPending(true);
+    try { addCopies(await drafts.readVersion(Number(version)), true); }
+    catch { setNotice("Could not open this revision. Try again."); }
+    finally { setVersionPending(false); }
+  }
+
+  function chooseKit(id: string, kit: Item["kit"], custom?: VideoSpec) {
+    clearPreview(id);
+    patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
+      spec: { ...row.spec, brand: kit === "second-spring" ? connected?.name ?? "Second Spring" : custom?.brand ?? "",
+        customContext: kit === "custom" ? custom?.customContext ?? "" : "" } }));
   }
 
   const approved = items.flatMap((item) => !item.approved || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
@@ -188,12 +239,34 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
         : <Link href="/signin?next=%2Fcontent-studio">Sign in to generate scripts</Link>}
       {approved.length > 0 && <button type="button" onClick={download}><Download size={15} aria-hidden /> Export approved ({approved.length})</button>}
     </div>
-    {signedIn && <p className="production-hint">Script generation uses your agent credits. Editing, approval and exporting project files run in this browser.</p>}
+    {draftKey && <div className="production-sync">
+      <p role="status">{({
+        opening: "Opening saved drafts…", ready: "Autosave is on", saving: "Saving drafts…", saved: "Saved to Supabase",
+        offline: "Cloud save unavailable. Your edits are kept in this tab.", conflict: "A newer revision exists. Open it before continuing.", local: "Saved in this tab",
+      })[drafts.status]}</p>
+      {drafts.status === "conflict" && <button type="button" onClick={() => void drafts.reopen()}>Open latest revision</button>}
+      {drafts.status === "offline" && <button type="button" onClick={drafts.retry}>Retry cloud save</button>}
+      {drafts.recovery && <button type="button" onClick={() => {
+        if (drafts.recovery && addCopies(drafts.recovery, true)) drafts.clearRecovery();
+      }}>Recover local edits as copies</button>}
+      {!!drafts.versions.length && <details>
+        <summary>Version history</summary>
+        <label>Saved revision<select value={version} onChange={(event) => setVersion(event.target.value)}>
+          <option value="">Choose a revision</option>
+          {drafts.versions.map(({ revision, created_at }) => <option key={revision} value={revision}>Version {revision} · {new Date(created_at).toLocaleString()}</option>)}
+        </select></label>
+        <button type="button" disabled={!version || versionPending || dispatching} onClick={() => void openVersion()}>Open as copies</button>
+      </details>}
+    </div>}
+    {canLoadBrand && <p className="production-hint">{brandStatus === "ready" ? `Connected brand kit: ${connected?.name} · Read-only`
+      : brandStatus === "checking" ? "Checking connected brand kits…" : "Could not verify the Second Spring kit. Refresh to retry."}</p>}
+    {signedIn && <p className="production-hint">Script generation uses your agent credits.</p>}
     {notice && <p role="alert">{notice}</p>}
     {items.map((item, index) => {
       const { spec } = item;
       const id = spec.id;
-      const locked = dispatching || item.pending;
+      const locked = dispatching || item.pending || uploading[id];
+      const previewUrl = previews[id] || (item.renders?.length ? studioMediaUrl(item.renders.at(-1)!.id) : "");
       let plan = item.approved?.plan;
       if (!plan && item.script.trim()) {
         try { plan = parseVideoPlan(item.script); } catch { /* Show the raw draft for correction. */ }
@@ -201,7 +274,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
       return <article className="production-item" key={id}>
         <div className="production-itemHeading">
           <h3>{spec.keyword.trim() || `Video ${index + 1}`}</h3>
-          <span>{item.pending ? "Writing script" : item.approved ? "Approved" : item.stale ? "Brief changed" : item.script ? "Review script" : "Brief"}</span>
+          <span>{item.pending ? "Writing script" : item.approved ? "Approved" : item.stale ? "Brief changed" : item.variationOf ? "Variation" : item.script ? "Review script" : "Brief"}</span>
+          <button type="button" aria-label={`Create variation of video ${index + 1}`} title="Create variation" disabled={locked || items.length >= limit} onClick={() => { addCopies([item], false); }}><CopyPlus size={15} /></button>
           <button type="button" aria-label={`Remove video ${index + 1}`} disabled={locked} onClick={() => {
             clearPreview(id);
             setItems((rows) => rows.filter((row) => row.spec.id !== id));
@@ -211,11 +285,14 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
           <label>Brand kit<select value={item.kit} onChange={(e) => {
-            clearPreview(id);
-            const kit = e.target.value as Item["kit"];
-            patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
-              spec: { ...row.spec, brand: kit === "second-spring" ? "Second Spring" : "", customContext: "" } }));
-          }}><option value="custom">Custom or unbranded</option>{canLoadBrand && <option value="second-spring">Second Spring · connected</option>}</select></label>
+            const value = e.target.value;
+            const reuse = items.find(({ spec: other }) => other.id === value);
+            chooseKit(id, value === "second-spring" ? "second-spring" : "custom", reuse?.spec);
+          }}><option value="custom">{item.kit === "custom" && spec.brand ? spec.brand : "Custom or unbranded"}</option>
+            {canLoadBrand && <option value="second-spring">Second Spring{brandStatus === "ready" ? " · connected" : ""}</option>}
+            {items.filter((other) => other.spec.id !== id && other.kit === "custom" && other.spec.brand.trim() && other.spec.customContext.trim())
+              .map(({ spec: other }) => <option key={other.id} value={other.id}>Reuse {other.brand}</option>)}
+          </select></label>
           {item.kit === "custom" && <label>Brand name<input value={spec.brand} maxLength={100} onChange={(e) => edit(id, { brand: e.target.value })} /></label>}
           <label>Video type<select value={spec.type} onChange={(e) => edit(id, { type: e.target.value as VideoSpec["type"] })}>
             {Object.entries(videoTypes).map(([key, value]) => <option value={key} key={key}>{value.label}</option>)}
@@ -223,20 +300,19 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
           <label>Runtime<select value={spec.duration} onChange={(e) => edit(id, { duration: Number(e.target.value) })}>
             {[15, 30, 45, 60, 90, 180, 300].map((seconds) => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : seconds === 90 ? "90 seconds" : `${seconds / 60} min`}</option>)}
           </select></label>
-          <label>Frame<select value={spec.ratio} onChange={(e) => edit(id, { ratio: e.target.value as VideoSpec["ratio"] })}>
-            <option value="9:16">Vertical · 9:16</option><option value="16:9">Landscape · 16:9</option><option value="1:1">Square · 1:1</option>
-          </select></label>
+          <fieldset className="production-wide production-frames"><legend>Export frames</legend>
+            {Object.entries(frameOptions).map(([ratio, label]) => {
+              const selected = chosenFrames(spec);
+              const active = selected.includes(ratio as VideoRatio);
+              return <label key={ratio}><input type="checkbox" checked={active} disabled={active && selected.length === 1} onChange={() => {
+                const frames = active ? selected.filter((value) => value !== ratio) : [...selected, ratio as VideoRatio];
+                edit(id, { ratio: frames[0], ratios: frames });
+              }} />{label} · {ratio}</label>;
+            })}
+          </fieldset>
           {item.kit === "custom" && <label className="production-wide">Brand context<textarea rows={2} value={spec.customContext} maxLength={5000} onChange={(e) => edit(id, { customContext: e.target.value })} placeholder="Audience, voice, approved claims and available assets" /></label>}
-          <details className="production-wide">
-            <summary>Reference notes</summary>
-            <label className="production-reference">Import a rea-video VIDEO.md breakdown<input type="file" accept=".md,text/markdown,text/plain" onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const excerpt = await file.slice(0, 12000).text();
-              edit(id, { reference: excerpt.slice(0, 6000) });
-            }} /></label>
-            <label>Shot order, pacing or visual references<textarea rows={2} value={spec.reference} maxLength={6000} onChange={(e) => edit(id, { reference: e.target.value })} /></label>
-          </details>
+          <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
+          <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
         {item.taskId && <Link href={`/app/task/${encodeURIComponent(item.taskId)}`}>Open script task</Link>}
         {plan && <details className="production-shots" open={!item.approved}>
@@ -277,19 +353,34 @@ export function ProductionBatch({ canLoadBrand, signedIn, onExample }: { canLoad
         {item.script.trim() && !item.approved && <div className="content-studio-runActions">
           <button type="button" disabled={locked || item.stale || !spec.keyword.trim()} onClick={() => void approve(item)}>Approve script and shots</button>
         </div>}
-        {item.approved && <div className="production-preview">
-          <label>Preview a rendered MP4<input type="file" accept="video/mp4,.mp4" onChange={(e) => {
+        {(item.approved || item.renders?.length) ? <div className="production-preview">
+          {item.approved && <label>{draftKey ? "Save and preview a rendered MP4" : "Preview a rendered MP4"}<input type="file" accept="video/mp4,.mp4" disabled={locked} onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) previewFile(item, file);
-          }} /></label>
-          <p>Playback stays on this device. Review the export here before sharing it.</p>
-          {previews[id] && <video controls playsInline preload="metadata" src={previews[id]} onLoadedMetadata={(e) => {
+            if (file) void previewFile(item, file);
+            e.target.value = "";
+          }} /></label>}
+          {uploading[id] && <p role="status">Saving video privately…</p>}
+          {draftKey && !!item.renders?.length && <ul aria-label="Saved renders">
+            {item.renders.map((asset) => <li className="production-sourceLine" key={asset.id}>
+              <button type="button" onClick={() => {
+                clearPreview(id);
+                setPreviews((current) => ({ ...current, [id]: studioMediaUrl(asset.id) }));
+              }}>Play {asset.name}</button>
+              <a href={studioMediaUrl(asset.id, true)}>Download</a>
+            </li>)}
+          </ul>}
+          <p>{draftKey ? "Saved renders are private. Review them here before sharing." : "Playback stays on this device."}</p>
+          {previewUrl && <video controls playsInline preload="metadata" src={previewUrl} onLoadedMetadata={(e) => {
             const video = e.currentTarget;
-            const [width, height] = videoDimensions[spec.ratio];
-            const matches = Math.abs(video.duration - spec.duration) <= 0.1 && Math.abs(video.videoWidth / video.videoHeight - width / height) < 0.01;
-            if (!matches) patch(id, (row) => ({ ...row, error: `Preview is ${video.duration.toFixed(2)}s at ${video.videoWidth} × ${video.videoHeight}. The brief calls for ${spec.duration}s at ${spec.ratio}.` }));
-          }} aria-label={`Private preview of ${item.approved.plan.title}`} />}
-        </div>}
+            const aspect = video.videoWidth / video.videoHeight;
+            const ratios = chosenFrames(spec);
+            const matches = Math.abs(video.duration - spec.duration) <= 0.1 && ratios.some((ratio) => {
+              const [width, height] = videoDimensions[ratio];
+              return Math.abs(aspect - width / height) < 0.01;
+            });
+            if (!matches) patch(id, (row) => ({ ...row, error: `Preview is ${video.duration.toFixed(2)}s at ${video.videoWidth} × ${video.videoHeight}. The brief calls for ${spec.duration}s at ${ratios.join(", ")}.` }));
+          }} aria-label={`Private preview of ${item.approved?.plan.title ?? spec.keyword}`} />}
+        </div> : null}
       </article>;
     })}
     <details className="production-toolchain">

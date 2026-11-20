@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Organic Intelligence, Inc.
 /** Browser-side client for the task API. The `api` builder owns the implementation; signatures are fixed. */
 import type { AgentEvent, ComputerView, CreateTaskInput, Interaction, TaskAttachment, TaskSummary } from "./types";
+import type { StudioMedia } from "@/lib/studio/media-types";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -13,6 +14,34 @@ export interface StudioBrandContext {
 }
 
 export const getSecondSpringContext = () => fetch("/api/admin/second-spring", { cache: "no-store" }).then((r) => j<StudioBrandContext>(r));
+
+export type StudioVersion = { revision: number; created_at: string };
+type StudioSnapshot<T> = StudioVersion & { items: T[] };
+export const getStudioDrafts = <T>() => fetch("/api/studio/drafts", { cache: "no-store" })
+  .then((r) => j<{ draft: StudioSnapshot<T> | null; versions: StudioVersion[] }>(r));
+export const getStudioRevision = <T>(revision: number) => fetch(`/api/studio/drafts?revision=${revision}`, { cache: "no-store" })
+  .then((r) => j<{ draft: StudioSnapshot<T> }>(r));
+export async function saveStudioDrafts(expectedRevision: number, items: unknown[]) {
+  const body = JSON.stringify({ expectedRevision, items });
+  const response = await fetch("/api/studio/drafts", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body,
+    keepalive: new TextEncoder().encode(body).length < 60_000,
+  });
+  if (response.status === 409) return null;
+  return j<{ revision: number; savedAt: string }>(response);
+}
+
+export const studioMediaUrl = (id: string, download = false) => `/api/studio/media?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;
+export async function uploadStudioMedia(file: File): Promise<StudioMedia> {
+  const prepared = await j<{ id: string; type: string; signedUrl: string }>(await fetch("/api/studio/media", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, size: file.size }),
+  }));
+  const response = await fetch(prepared.signedUrl, {
+    method: "PUT", body: file, headers: { "Content-Type": prepared.type, "x-upsert": "false" },
+  });
+  if (!response.ok) throw new Error(`Supabase Storage refused the upload (${response.status}).`);
+  return { id: prepared.id, name: file.name, type: prepared.type, size: file.size };
+}
 
 export const listTasks = () => fetch("/api/tasks").then((r) => j<{ tasks: TaskSummary[] }>(r));
 export const getTask = (id: string) => fetch(`/api/tasks/${id}`).then((r) => j<{ task: TaskSummary; events: AgentEvent[] }>(r));

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
 import type { Metadata } from "next";
+import { createHash } from "node:crypto";
 import { Suspense } from "react";
 import { getSession } from "@/lib/session";
 import { operatorFor } from "@/lib/observability/operator";
@@ -18,5 +19,7 @@ export default function Page() {
 async function StudioSession() {
   const session = await getSession();
   const owner = session && process.env.APP_DB_SCHEMA === "mahara" && (await operatorFor(session))?.owner;
-  return <ContentStudio canLoadBrand={Boolean(owner)} signedIn={Boolean(session)} />;
+  const draftKey = session && process.env.APP_DB_SCHEMA === "mahara"
+    ? createHash("sha256").update(session.userId).digest("hex").slice(0, 24) : undefined;
+  return <ContentStudio canLoadBrand={Boolean(owner)} signedIn={Boolean(session)} draftKey={draftKey} />;
 }

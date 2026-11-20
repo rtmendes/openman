@@ -1,4 +1,4 @@
-import { productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
+import { chosenFrames, productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
 
 export const videoDimensions = { "9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080] } as const;
 export type ApprovedVideo = { spec: VideoSpec; plan: VideoPlan; brandContext: string };
@@ -28,6 +28,9 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
   const editorial = [
     `# ${plan.title}`, "", `- Brand: ${spec.brand || "Unbranded"}`, `- Keyword: ${spec.keyword}`,
     `- Format: ${videoTypes[spec.type].label}, ${spec.ratio}, ${spec.duration} seconds`, "",
+    ...(spec.voice ? [`- Narration: ${spec.voice.style} · ${spec.voice.language || "match brief"} · ${spec.voice.rate}×`] : []),
+    ...(spec.referenceLinks ?? []).map((url) => `- Reference URL: ${url}`),
+    ...(spec.media ?? []).map(({ name }) => `- Private material in Content Studio: ${name}`),
     "## Brand Kit", brandContext || "No brand kit supplied.", "",
     "## Shot order and timing",
     ...shots.flatMap(({ start, end, narration, visual, sound, asset, file, overlay }, i) => [
@@ -96,7 +99,10 @@ process.exitCode = failures ? 1 : 0;
 `;
 
 export function productionFiles(videos: ApprovedVideo[]): Files {
-  const projects = videos.map((_, index) => `video-${String(index + 1).padStart(2, "0")}`);
+  const variants = videos.flatMap((video) => chosenFrames(video.spec).map((ratio) => ({
+    ...video, spec: { ...video.spec, ratio, ratios: [ratio] },
+  })));
+  const projects = variants.map((_, index) => `video-${String(index + 1).padStart(2, "0")}`);
   return {
     "README.md": [
       "# Content Studio · approved draft projects", "",
@@ -107,7 +113,7 @@ export function productionFiles(videos: ApprovedVideo[]): Files {
     ].join("\n"),
     "batch.json": JSON.stringify({ projects }, null, 2),
     "render-batch.mjs": runner,
-    ...Object.fromEntries(videos.flatMap((video, i) =>
+    ...Object.fromEntries(variants.flatMap((video, i) =>
       Object.entries(buildProject(video)).map(([name, value]) => [`${projects[i]}/${name}`, value]),
     )),
   };

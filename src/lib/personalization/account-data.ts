@@ -7,6 +7,7 @@
  */
 import { brand } from "@/config/brand";
 import { db, fail } from "@/lib/db/client";
+import { deleteStudioMedia } from "@/lib/db/studio-drafts";
 import { deleteTask } from "@/lib/agent/server/tasks";
 import type { Store } from "@/lib/store";
 import { setRevocation } from "@/lib/db/revocations";
@@ -20,6 +21,7 @@ import { buildZip, type ZipEntry } from "./zip";
  * outlive the account so cookies and tokens issued before the deletion stay refused.
  */
 export const USER_TABLES = [
+  "studio_draft_versions",
   "task_events",
   "task_files",
   "shares",
@@ -68,6 +70,7 @@ const SECRET_COLUMNS = new Set(["orgo_key_enc", "hermes_key_enc", "secret_enc", 
 
 /** Tables in the export, in a readable order: every user table. */
 const EXPORT_TABLES = [
+  "studio_draft_versions",
   "accounts", "settings", "tasks", "task_events", "task_files", "shares", "projects", "project_files", "project_connectors", "project_skills",
   "knowledge", "automations", "automation_runs", "websites", "website_secrets", "mailboxes", "mail_senders", "mail_threads", "mail_messages", "mail_ops",
   "phone_numbers", "phone_messages", "phone_calls", "meetings", "recordings", "recording_parts", "recording_images", "skill_builds",
@@ -163,6 +166,7 @@ export async function deleteUserRows(userId: string): Promise<Record<string, num
   await setRevocation(userId, { sessions: now, automations: now });
   forgetRevocation(userId);
   const removed: Record<string, number> = {};
+  await deleteStudioMedia(userId);
   {
     // Invite list entries (staging): members are removed; an owner row stays so the list keeps its owner.
     const { error } = await db().from("invites").delete().eq("orgo_user_id", userId).eq("role", "member");
