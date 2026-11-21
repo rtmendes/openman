@@ -99,6 +99,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && isStudioRunOpen(entry.phase));
   const baseDisabled = loading || pending || !revision || !canStart;
   const selected = run?.input.suggestion;
+  const research = run?.state.stage === 1 ? run.state.outputs.find(({ result }) => result.stage === 1)?.result : undefined;
   let packageOptions = run?.state.packaging;
   const packagedHandoff = run?.state.outputs.find(({ result }) => result.stage === 2)?.result.handoff;
   if (!packageOptions && packagedHandoff?.recommendedOption) {
@@ -116,6 +117,11 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
 
   return <>
     {packageOptions && <PackagingPreview result={packageOptions} spec={run.input.spec} kit={run.input.kit} />}
+    {research && <section className="studio-packaging" aria-label="Saved YouTube research">
+      <h4>Saved YouTube research</h4>
+      <p>{research.summary}</p>
+      {research.handoff.outliers && <YouTubeEvidenceTable csv={research.handoff.outliers} />}
+    </section>}
     <aside className="studio-project-agent" aria-label="Project assistant">
     <section id="studio-suggestions" className="studio-assistant-card" aria-labelledby="studio-assistant-heading">
       <h3 id="studio-assistant-heading"><Sparkles size={16} aria-hidden /> AI suggestions</h3>
@@ -167,7 +173,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       {run.state.taskId && run.phase !== "dispatching" && <Link href={`/app/task/${encodeURIComponent(run.state.taskId)}`}>{run.phase === "waiting" ? "Open task to respond" : "View agent task"}</Link>}
       {run.state.outputs.filter(({ result }) => result.stage !== 2 || !packageOptions).map(({ result }) => <details key={result.stage} open={result.stage === run.state.stage && run.phase === "review"}>
         <summary>{stages[result.stage].title}</summary><p>{result.summary}</p>
-        {result.stage === 1 && result.handoff.outliers && <YouTubeEvidenceTable csv={result.handoff.outliers} />}
+        {result.stage === 1 && !research && result.handoff.outliers && <YouTubeEvidenceTable csv={result.handoff.outliers} />}
         {Object.entries(result.handoff).map(([field, value]) => <details className="studio-handoff" key={field}><summary>{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</summary><pre>{value}</pre></details>)}
       </details>)}
       {run.state.plan && <div className="studio-result-option">
@@ -209,3 +215,4 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
     </aside>
   </>;
 }
+
