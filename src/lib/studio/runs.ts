@@ -3,6 +3,7 @@ import { overlayPositions } from "@/app/content-studio/production";
 import type { StageOutput } from "@/app/content-studio/pipeline";
 import type { Brief } from "@/app/content-studio/workflow";
 import type { VideoPlan, VideoSpec } from "@/app/content-studio/production";
+import type { StudioPackaging } from "./packaging";
 
 export const suggestionActions = {
   angles: "Suggest three distinct creative angles",
@@ -79,6 +80,7 @@ export type StudioRunState = {
   outputs: StageOutput[];
   plan?: VideoPlan;
   alternatives?: StudioAlternative[];
+  packaging?: StudioPackaging;
   message?: string;
   notes?: string;
 };

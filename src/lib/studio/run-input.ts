@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { brandBrief, chosenFrames, parseVideoPlan, videoTypes, type VideoSpec } from "@/app/content-studio/production";
 import { platforms } from "@/app/content-studio/workflow";
+import { storyLabels, storyStyles } from "@/app/content-studio/story-workflow";
 import { db, fail } from "@/lib/db/client";
 import { studioDraft } from "@/lib/db/studio-drafts";
 import { operatorFor } from "@/lib/observability/operator";
@@ -17,6 +18,7 @@ const project = z.object({
     customContext: z.string().max(5000), audience: z.string().max(300).optional(), language: z.string().max(80).optional(),
     platforms: z.array(z.enum(platforms)).min(1).max(3).optional(),
     type: z.enum(["skit", "explainer", "demo", "montage", "motion"]), duration: z.number().int().min(15).max(300),
+    storyStyle: z.enum(storyStyles).optional(),
     ratio, ratios: z.array(ratio).min(1).max(3).optional(),
     voice: z.object({ style: z.string().max(100), language: z.string().max(80).optional(), rate: z.number().min(0.5).max(2) }).optional(),
     reference: z.string().max(6000), referenceLinks: z.array(z.string().max(2000)).max(15).optional(),
@@ -44,6 +46,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
     context = brandBrief(data);
   }
   const notes = [spec.reference, spec.referenceLinks?.join("\n"), `Frames: ${chosenFrames(spec).join(", ")}`,
+    spec.storyStyle ? `Production direction: ${storyLabels[spec.storyStyle]}` : "",
     spec.media?.length ? `Private reference filenames: ${spec.media.map(({ name }) => name).join(", ")}` : ""].filter(Boolean).join("\n\n");
   if (input.kind === "suggestion" && input.suggestion.action !== "angles") {
     try {

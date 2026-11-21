@@ -60,7 +60,7 @@ for (const [index, stage] of stages.entries()) {
   prior.push({ taskId: "fixture-" + index, result: valid });
   console.log("PASS " + stage.title);
 }
-assert.deepEqual(stageRules.flatMap((rule, i) => rule.review ? [i] : []), [0, 1, 3, 4, 6]);
+assert.deepEqual(stageRules.flatMap((rule, i) => rule.review ? [i] : []), [0, 1, 2, 3, 4, 6]);
 console.log("PASS runtime presets, handoff checks, revision context, upstream outputs, and approval definitions");
 
 const { checkedStudioOutput, studioDecision, promptForStudioRun } = require("../src/lib/studio/run-output.ts");
@@ -73,10 +73,15 @@ const finishedPlan = { title: "Hostage Talks", titleOptions: ["2 A.M. Talks", "T
   { end: 4, narration: "The thermostat blinked first.", visual: "Tight shot on the thermostat.", overlay: "2 A.M.", sound: "Click.", asset: "Owned footage." },
   { end: 30, narration: "The fan is my emergency contact.", visual: "Hold on her stare.", overlay: "MY TERMS", overlayPosition: "top", sound: "Fan hum.", asset: "Owned footage." },
 ] };
+const packaging = { patterns: "Use the opening joke. This scan is directional.", recommendation: 2,
+  options: ["payoff", "reaction", "detail"].map((look, i) => ({
+    title: finishedPlan.titleOptions[i], look, overlay: "THE FAN", composition: "Tight on the framing subject.", reason: "Illustrates the actual joke.",
+  })),
+};
 for (const [index] of stages.entries()) {
   assert.equal(run.state.stage, index);
   assert.equal(studioDecision(run, "approve", ""), null, "Running tasks cannot be approved.");
-  const result = checkedStudioOutput(run, JSON.stringify(index === 6 ? finishedPlan : prior[index].result));
+  const result = checkedStudioOutput(run, JSON.stringify(index === 6 ? finishedPlan : index === 2 ? packaging : prior[index].result));
   const next = { ...run, ...result };
   if (stageRules[index].review) {
     assert.equal(next.phase, "review");
@@ -97,8 +102,14 @@ assert.equal(run.state.outputs.length, 6);
 assert.deepEqual(run.state.plan, finishedPlan);
 assert.throws(() => checkedStudioOutput(run, JSON.stringify({ ...finishedPlan, shots: finishedPlan.shots.slice(0, 1) })));
 assert.equal(studioDecision(run, "retry", ""), null);
-const single = { ...run, input: { ...run.input, singleStage: 2 }, state: { stage: 2, taskId: "fixture-2", outputs: [] } };
-assert.equal(checkedStudioOutput(single, JSON.stringify(prior[2].result)).phase, "complete");
+const single = { ...run, input: { ...run.input, singleStage: 2, script: JSON.stringify(finishedPlan) },
+  state: { stage: 2, taskId: "fixture-2", outputs: [prior[1]] } };
+assert.match(promptForStudioRun(single), /Fixture for outliers/);
+const packaged = { ...single, ...checkedStudioOutput(single, "Here are the drafts.\n```json\n" + JSON.stringify(packaging) + "\n```") };
+assert.equal(packaged.phase, "review");
+assert.deepEqual(packaged.state.packaging, packaging);
+assert.equal(studioDecision(packaged, "approve", "").phase, "complete");
+assert.throws(() => checkedStudioOutput(single, JSON.stringify({ ...packaging, options: [packaging.options[0], packaging.options[0], packaging.options[2]] })));
 const withSuggestion = { ...run, input: { ...run.input, script: JSON.stringify(finishedPlan), suggestion: { action: "visual", shot: 1, direction: "Leave space for the face." } } };
 assert.match(promptForStudioRun(withSuggestion), /Selected shot: 2/);
 const layout = { label: "High title", text: "Frame her face below the top title.", reason: "Keeps the reaction visible.", overlay: "MY TERMS", overlayPosition: "top" };
@@ -135,3 +146,9 @@ assert.equal(packed.readUInt32LE(0), 0x04034b50);
 assert.equal(packed.readUInt32LE(packed.length - 22), 0x06054b50);
 assert.equal(packed.readUInt16LE(packed.length - 12), Object.keys(exported).length);
 console.log("PASS editable ZIP, vertical/landscape/square dimensions, timed captions, and applied overlay placement");
+const story = productionFiles([{ spec: { ...run.input.spec, storyStyle: "stick-figure" }, plan: finishedPlan, brandContext: "Second Spring" }]);
+assert.match(story["video-01/.opencode/skills/mahara-story-production/SKILL.md"], /name: mahara-story-production/);
+assert.match(story["video-01/OPEN-CODE.md"], /NHEurGsycYM&t=237s/);
+assert.match(story["video-01/MoraViral-brief.md"], /The thermostat blinked first/);
+assert.equal(exported["video-01/OPEN-CODE.md"], undefined);
+console.log("PASS optional OpenCode skill, tutorial checkpoints, and separate MoraViral handoff");

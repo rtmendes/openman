@@ -1,5 +1,6 @@
 import type { StartStudioRun, StudioRun, StudioRunInput, StudioRunPhase, StudioRunState } from "@/lib/studio/runs";
 import { activeStudioPhases, studioSourceKey } from "@/lib/studio/runs";
+import type { StageOutput } from "@/app/content-studio/pipeline";
 import { db, fail } from "./client";
 
 const columns = "id,video_id,kind,phase,version,input,state,due_at,created_at,updated_at";
@@ -37,10 +38,18 @@ export async function studioRun(userId: string, id: string) {
   return data as StudioRun | null;
 }
 
-export async function addStudioRun(userId: string, request: StartStudioRun, input: StudioRunInput, stage: number) {
+export async function approvedStudioResearch(userId: string, videoId: string) {
+  const { data, error } = await db().from("studio_runs").select("state").eq("user_id", userId).eq("video_id", videoId)
+    .eq("kind", "workflow").eq("phase", "complete").contains("state", { outputs: [{ result: { stage: 1, status: "ready" } }] })
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) fail("find approved Studio research", error);
+  return (data?.state as StudioRunState | undefined)?.outputs.find(({ result }) => result.stage === 1 && result.status === "ready");
+}
+
+export async function addStudioRun(userId: string, request: StartStudioRun, input: StudioRunInput, stage: number, outputs: StageOutput[] = []) {
   const { data, error } = await db().from("studio_runs").insert({
     user_id: userId, id: request.id, video_id: request.videoId, kind: request.kind,
-    phase: "queued", input, state: { stage, outputs: [] },
+    phase: "queued", input, state: { stage, outputs },
   }).select(columns).single();
   if (error && error.code !== "23505") fail("queue Studio run", error);
   return data as StudioRun | null;

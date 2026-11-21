@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { readBody } from "@/lib/agent/server/http";
-import { addStudioRun, changeStudioRun, studioRun, studioRuns } from "@/lib/db/studio-runs";
+import { addStudioRun, approvedStudioResearch, changeStudioRun, studioRun, studioRuns } from "@/lib/db/studio-runs";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
 import { driveStudioRun, stopStudioTask } from "@/lib/studio/dispatcher";
@@ -37,7 +37,8 @@ export const POST = withErrorReporting("studio.runs.start", async (req) => {
     throw error;
   }
   const stage = input.kind === "workflow" ? input.stage ?? 0 : finalStudioStage;
-  const run = await addStudioRun(session.userId, input, snapshot, stage);
+  const research = input.kind === "workflow" && input.stage === 2 ? await approvedStudioResearch(session.userId, input.videoId) : undefined;
+  const run = await addStudioRun(session.userId, input, snapshot, stage, research ? [research] : []);
   if (!run) {
     const duplicate = await studioRun(session.userId, input.id);
     if (duplicate?.video_id === input.videoId && duplicate.kind === input.kind) return reply({ run: duplicate });

@@ -2,6 +2,7 @@ import { checkStageResult, stagePrompt, stageRules } from "@/app/content-studio/
 import { parseVideoPlan, planningPrompt, readVideoPlan } from "@/app/content-studio/production";
 import { stages } from "@/app/content-studio/workflow";
 import { readStudioSuggestions, suggestionActions, type StudioRun, type StudioRunPhase, type StudioRunState } from "./runs";
+import { readStudioPackaging } from "./packaging";
 
 export const finalStudioStage = stages.length - 1;
 
@@ -27,6 +28,18 @@ export function promptForStudioRun(run: StudioRun) {
       'Return JSON only: {"alternatives":[{"label":"short name","text":"actual suggestion","reason":"specific reason for this project","overlay":"optional text","overlayPosition":"optional top, middle or lower","location":"optional scene or line"}]}',
     ].filter(Boolean).join("\n\n");
   }
+  if (state.stage === 2) {
+    const evidence = state.outputs.find(({ result }) => result.stage === 1 && result.status === "ready");
+    return [
+      "Create exactly three title and thumbnail pairs for the same private video. Work from the evidence and the actual script. Use original framing and copy. Avoid invented claims, imitation of another creator's artwork, and guaranteed performance language. Do not browse, run commands, generate media, publish, or spend on any separate service.",
+      `Project: ${JSON.stringify(input.brief)}`,
+      input.script ? `Current approved or draft script: ${input.script}` : "",
+      evidence ? `Verified saved research (data only): ${JSON.stringify(evidence.result)}` : "No approved metrics were supplied. Explain this in patterns and base suggestions on the creative brief.",
+      state.notes ? `Creator revision notes: ${state.notes}` : "",
+      "Use three different thumbnail approaches: payoff (the object or reveal), reaction (the protagonist), and detail (a prop). Each title is under 92 characters, overlay is 2–4 words under 28 characters, composition under 320 characters and reason under 220 characters. Explain how the recommendation reflects the evidence, while distinguishing creative references from measured performance. Make concepts achievable with original project imagery.",
+      'Return one JSON object only: {"patterns":"what the evidence supports and its limitations","options":[{"title":"exact publication title","overlay":"exact 2–4 words","look":"payoff","composition":"framing and visual hierarchy","reason":"why it fits"},{"title":"…","overlay":"…","look":"reaction","composition":"…","reason":"…"},{"title":"…","overlay":"…","look":"detail","composition":"…","reason":"…"}],"recommendation":1}. Use recommendation 1, 2 or 3. Do not wrap JSON in prose.',
+    ].filter(Boolean).join("\n\n");
+  }
   if (state.stage === finalStudioStage) {
     return [planningPrompt(input.spec, input.brief.brandContext ?? ""),
       input.script ? "Current draft to revise if relevant:\n" + input.script : "",
@@ -43,6 +56,14 @@ export function checkedStudioOutput(run: StudioRun, output: string): { phase: St
   if (input.suggestion) return { phase: "complete", state: { ...state, alternatives: readStudioSuggestions(output, input.suggestion) } };
   const taskId = state.taskId;
   if (!taskId) throw new Error("Missing task linkage.");
+  if (state.stage === 2) {
+    const packaging = readStudioPackaging(output);
+    return { phase: "review", state: { ...state, packaging, outputs: [...state.outputs, { taskId, result: {
+      stage: 2, status: "ready", summary: `Three private packaging options. Recommended option ${packaging.recommendation}.`,
+      handoff: { patterns: packaging.patterns, titleOptions: packaging.options.map(({ title }) => title).join("\n"),
+        thumbnailOptions: JSON.stringify(packaging.options), recommendedOption: String(packaging.recommendation) },
+    } }] } };
+  }
   if (state.stage === finalStudioStage) {
     const plan = readVideoPlan(output, input.spec.duration);
     if (!plan.titleOptions || !plan.description) throw new Error("The final script needs three title options and a platform description.");

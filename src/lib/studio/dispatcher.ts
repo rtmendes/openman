@@ -38,9 +38,9 @@ async function step(userId: string, run: StudioRun) {
       try {
         await createTask(store, {
           mode: "standard",
-          interaction: claimed.kind === "suggestion" || claimed.state.stage === finalStudioStage ? "chat" : "agent",
+          interaction: claimed.kind === "suggestion" || claimed.state.stage === finalStudioStage || claimed.state.stage === 2 ? "chat" : "agent",
           prompt,
-          references: claimed.state.outputs.map(({ taskId: id }) => id),
+          references: claimed.state.stage === 2 ? [] : claimed.state.outputs.map(({ taskId: id }) => id),
         }, { id: taskId, title: claimed.input.suggestion ? suggestionActions[claimed.input.suggestion.action] : stages[claimed.state.stage].title });
       } catch (error) {
         // Keep the reserved task ID when the write might have completed before the response failed.

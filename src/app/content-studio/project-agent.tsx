@@ -6,6 +6,8 @@ import { Sparkles, Workflow } from "lucide-react";
 import { decideStudioRun, listStudioRuns, startStudioRun, studioMediaUrl } from "@/lib/agent/client";
 import { isStudioRunActive, isStudioRunOpen, matchesStudioSource, suggestionActions, type StartStudioRun, type StudioAlternative, type StudioRun, type StudioSuggestion } from "@/lib/studio/runs";
 import { chosenFrames, parseVideoPlan, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
+import { PackagingPreview } from "./packaging-preview";
+import { readStudioPackaging } from "@/lib/studio/packaging";
 import { stages } from "./workflow";
 
 const phaseLabels: Record<StudioRun["phase"], string> = {
@@ -96,6 +98,13 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && isStudioRunOpen(entry.phase));
   const baseDisabled = loading || pending || !revision || !canStart;
   const selected = run?.input.suggestion;
+  let packageOptions = run?.state.packaging;
+  const packagedHandoff = run?.state.outputs.find(({ result }) => result.stage === 2)?.result.handoff;
+  if (!packageOptions && packagedHandoff?.recommendedOption) {
+    try { packageOptions = readStudioPackaging(JSON.stringify({ patterns: packagedHandoff.patterns,
+      options: JSON.parse(packagedHandoff.thumbnailOptions), recommendation: Number(packagedHandoff.recommendedOption) })); }
+    catch { /* Historical free-text handoffs still display below. */ }
+  }
   let sourcePlan: VideoPlan | undefined;
   if (selected && run.input.script) try { sourcePlan = parseVideoPlan(run.input.script); } catch { /* Angle suggestions also work without a shot plan. */ }
   const sourceShot = sourcePlan?.shots[selected?.shot ?? 0];
@@ -152,6 +161,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
         <summary>{stages[result.stage].title}</summary><p>{result.summary}</p>
         {Object.entries(result.handoff).map(([field, value]) => <details className="studio-handoff" key={field}><summary>{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</summary><pre>{value}</pre></details>)}
       </details>)}
+      {packageOptions && <PackagingPreview result={packageOptions} spec={run.input.spec} kit={run.input.kit} />}
       {run.state.plan && <div className="studio-result-option">
         <strong>{run.state.plan.title}</strong><p>{run.state.plan.shots.length} shots · {run.input.spec.duration}s</p>
         <details><summary>Read proposed script</summary><ol>{run.state.plan.shots.map((entry, index) => <li key={index}>{entry.narration || entry.visual}</li>)}</ol></details>

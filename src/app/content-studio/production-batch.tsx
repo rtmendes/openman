@@ -10,6 +10,8 @@ import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPla
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
 import { NarrationOptions, ReferenceInputs } from "./production-inputs";
 import { ProjectAgent } from "./project-agent";
+import { StoryWorkflowPanel } from "./story-workflow-panel";
+import { storyLabels, storyStyles } from "./story-workflow";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
 
@@ -375,6 +377,13 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <label>Video type<select value={spec.type} onChange={(e) => edit(id, { type: e.target.value as VideoSpec["type"] })}>
             {Object.entries(videoTypes).map(([key, value]) => <option value={key} key={key}>{value.label}</option>)}
           </select></label>
+          <label>Production workflow<select value={spec.storyStyle ?? ""} onChange={(e) => {
+            const style = storyStyles.find((choice) => choice === e.target.value);
+            edit(id, { storyStyle: style });
+          }}>
+            <option value="">Standard Studio</option>
+            {storyStyles.map((style) => <option key={style} value={style}>{storyLabels[style]}</option>)}
+          </select></label>
           <label>Runtime<select value={spec.duration} onChange={(e) => edit(id, { duration: Number(e.target.value) })}>
             {[15, 30, 45, 60, 90, 180, 300].map((seconds) => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : seconds === 90 ? "90 seconds" : `${seconds / 60} min`}</option>)}
           </select></label>
@@ -402,6 +411,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
           <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
+        {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} />}
         {item.taskId && <Link href={`/app/task/${encodeURIComponent(item.taskId)}`}>Open script task</Link>}
         {plan && <details className="production-shots" open={!item.approved}>
           <summary>{plan.title} · {plan.shots.length} shots</summary>

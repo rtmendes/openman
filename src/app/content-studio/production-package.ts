@@ -1,4 +1,5 @@
 import { chosenFrames, productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
+import { storyWorkflowFiles } from "./story-workflow";
 
 export const videoDimensions = { "9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080] } as const;
 export type ApprovedVideo = { spec: VideoSpec; plan: VideoPlan; brandContext: string };
@@ -67,6 +68,7 @@ ${parts}
       `${i + 1}\n${stamp(start)} --> ${stamp(end)}\n${narration}\n`,
     ).join("\n"),
     "plan.json": JSON.stringify({ spec, plan, assets: shots.map(({ file }) => file).concat("assets/voiceover.wav") }, null, 2),
+    ...storyWorkflowFiles({ spec, plan, brandContext }),
     ...(spec.reference ? { "Reference-VIDEO.md": spec.reference } : {}),
   };
 }
@@ -111,6 +113,7 @@ export function productionFiles(videos: ApprovedVideo[]): Files {
       "# Content Studio · approved draft projects", "",
       "Each folder contains an approved shot plan, narration script, a HyperFrames composition, draft subtitles and editing handoffs. The MP4 and WAV paths are slots for your cleared footage and timed narration. Provide those files before rendering.", "",
       ...productionTools.map(({ name, role, input, url }) => `- [${name}](${url}) · ${role}. ${input}`), "",
+      ...(variants.some(({ spec }) => spec.storyStyle) ? ["OpenCode projects include OPEN-CODE.md and a project skill. Open each chosen frame folder as a separate project.", ""] : []),
       "Place the named shot clips and one timed voiceover WAV in each assets folder. Keep the voiceover timeline aligned to the shot sheet. Draft subtitles use shot timing and need alignment against the recorded narration. Refine generated text overlays and inspect the hook, action, contrast, caption safe areas, sound and ending before review.", "",
       "Open a project folder and use the HyperFrames CLI to lint, preview, and render draft.mp4. To render a prepared batch with an existing local CLI, run node render-batch.mjs PATH_TO_HYPERFRAMES_CLI_JS from the extracted folder. Each row reports missing media and continues with the next row. Private review only.",
     ].join("\n"),
