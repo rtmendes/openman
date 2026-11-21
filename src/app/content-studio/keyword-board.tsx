@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { lookupStudioKeywords } from "@/lib/agent/client";
+import { useEffect, useRef, useState } from "react";
+import { lookupStudioKeywords, studioKeywordLookup } from "@/lib/agent/client";
 import {
   importKeywordCsv, keywordBatchSize, keywordId, keywordLimit, keywordMarketNames, keywordObjectives, keywordProviders,
-  rankKeywords, selectedKeywordEvidence, type KeywordBoard, type KeywordEvidence,
+  rankKeywords, selectedKeywordEvidence, type KeywordBoard, type KeywordEvidence, type KeywordLookup,
 } from "@/lib/studio/keyword-research";
 
 const number = new Intl.NumberFormat();
 const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4 });
 const display = (value?: number) => value === undefined ? "Unavailable" : number.format(value);
 
-export function ResearchKeywordBoard({ topic, audience, value, onChange, dataForSeo }: {
-  topic: string; audience: string; value: KeywordBoard;
+export function ResearchKeywordBoard({ videoId, topic, audience, value, onChange, dataForSeo }: {
+  videoId: string; topic: string; audience: string; value: KeywordBoard;
   onChange: (patch: (board: KeywordBoard) => KeywordBoard) => void; dataForSeo: boolean;
 }) {
   const [provider, setProvider] = useState<KeywordEvidence["provider"]>("LowFruits");
@@ -24,6 +24,8 @@ export function ResearchKeywordBoard({ topic, audience, value, onChange, dataFor
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState("");
   const [visibleRows, setVisibleRows] = useState(12);
+  const activeRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => activeRequest.current?.abort(), []);
   const seed = value.seed || topic;
   const ranked = rankKeywords(value.rows, seed, audience, value.objective);
   const filtered = ranked.filter(({ row }) => (filter === "all" || row.provider === filter) &&
@@ -41,6 +43,37 @@ export function ResearchKeywordBoard({ topic, audience, value, onChange, dataFor
     });
     setVisibleRows(12);
     setFilter("all");
+  }
+
+  async function waitForReport(start: () => Promise<KeywordLookup | null>) {
+    if (activeRequest.current) return;
+    const active = new AbortController();
+    activeRequest.current = active;
+    setStatus("Waiting for the provider. You can return to this project and open the latest report.");
+    setPending(true);
+    try {
+      let lookup = await start();
+      if (!lookup) {
+        if (!active.signal.aborted) setStatus("No DataForSEO report has been saved for this project.");
+        return;
+      }
+      while (!lookup.result && !active.signal.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, 3500));
+        if (active.signal.aborted) return;
+        lookup = (await studioKeywordLookup(videoId, lookup.id)).lookup ?? lookup;
+      }
+      if (active.signal.aborted || !lookup.result) return;
+      if ("error" in lookup.result) { setStatus(lookup.result.error); return; }
+      const { rows, cost } = lookup.result;
+      addRows(rows);
+      setStatus(rows.length ? `DataForSEO returned ${rows.length} keywords${cost === undefined ? "." : ` · ${dollars.format(cost)} reported.`}`
+        : "DataForSEO returned no keywords. Try a more specific seed.");
+    } catch (error) {
+      if (!active.signal.aborted) setStatus(error instanceof Error ? error.message : "Could not read the saved keyword lookup.");
+    } finally {
+      if (!active.signal.aborted) setPending(false);
+      activeRequest.current = null;
+    }
   }
 
   async function readFile(file: File) {
@@ -74,17 +107,11 @@ export function ResearchKeywordBoard({ topic, audience, value, onChange, dataFor
       <label>Google language<select value={language} onChange={(event) => setLanguage(event.target.value)}>
         <option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option></select></label>
       <div className="content-studio-runActions">
-        <button type="button" disabled={pending || seed.trim().length < 2} onClick={async () => {
-          setPending(true);
-          setStatus("");
-          try {
-            const { rows, cost } = await lookupStudioKeywords(seed, market, language);
-            addRows(rows);
-            setStatus(rows.length ? `DataForSEO returned ${rows.length} keywords${cost === undefined ? "." : ` · ${dollars.format(cost)} reported.`}`
-              : "DataForSEO returned no keywords. Try a more specific seed.");
-          } catch (error) { setStatus(error instanceof Error ? error.message : "Keyword lookup failed."); }
-          finally { setPending(false); }
-        }}>{pending ? "Looking up keywords…" : "Get Google keyword data · about $0.015"}</button>
+        <button type="button" disabled={pending || seed.trim().length < 2} onClick={() =>
+          void waitForReport(() => lookupStudioKeywords(videoId, seed, market, language))
+        }>{pending ? "Waiting for DataForSEO…" : "Get Google keyword data · about $0.015"}</button>
+        <button type="button" disabled={pending} onClick={() =>
+          void waitForReport(async () => (await studioKeywordLookup(videoId)).lookup)}>Open latest report</button>
         <small>One DataForSEO lookup, up to {keywordBatchSize} results.</small>
       </div>
     </div>}

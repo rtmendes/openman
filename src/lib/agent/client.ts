@@ -4,6 +4,7 @@
 import type { AgentEvent, ComputerView, CreateTaskInput, Interaction, TaskAttachment, TaskSummary } from "./types";
 import type { StudioMedia } from "@/lib/studio/media-types";
 import type { ChangeStudioRun, StartStudioRun, StudioRun } from "@/lib/studio/runs";
+import type { KeywordLookup } from "@/lib/studio/keyword-research";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -49,24 +50,27 @@ export type StudioResearchSource = { title: string; description?: string; url: s
 export const searchStudioTopic = (topic: string) =>
   studioRunRequest<{ sources: StudioResearchSource[] }>(`/api/studio/research?q=${encodeURIComponent(topic)}`);
 export type StudioProviderStatus = { dataForSeo: boolean; subscribr: boolean };
-type SubscribrEntry = { id: number; title: string; hasScript?: boolean };
+type SubscribrEntry = { id: number; title: string; hasScript?: boolean; scriptCount?: number };
 type SubscribrPage = { entries: SubscribrEntry[]; page: number; lastPage: number };
 export type SubscribrNarration = { id: number; script: string; outline: string; version: number };
 export const studioProviderStatus = () => studioRunRequest<StudioProviderStatus>("/api/studio/providers?action=status");
-export const listSubscribrChannels = (page = 1) =>
-  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=channels&page=${page}`);
+export const listSubscribrChannels = (page = 1, search = "") =>
+  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=channels&page=${page}&search=${encodeURIComponent(search)}`);
 export const listSubscribrScripts = (channel: number, page: number, search: string) =>
   studioRunRequest<SubscribrPage>(`/api/studio/providers?action=scripts&channel=${channel}&page=${page}&search=${encodeURIComponent(search)}`);
 export const getSubscribrNarration = (script: number) =>
   studioRunRequest<SubscribrNarration>(`/api/studio/providers?action=narration&script=${script}`);
-export async function lookupStudioKeywords(seed: string, market: string, language: string) {
+export const studioKeywordLookup = (video: string, request?: string) =>
+  studioRunRequest<{ lookup: KeywordLookup | null }>(
+    `/api/studio/providers?${new URLSearchParams({ action: "keyword-result", video, ...(request ? { request } : {}) })}`);
+export async function lookupStudioKeywords(video: string, seed: string, market: string, language: string) {
   const response = await fetch("/api/studio/providers", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ seed, market, language, confirmCharge: true }),
+    body: JSON.stringify({ video, request: crypto.randomUUID(), seed, market, language, confirmCharge: true }),
   });
-  const data = await response.json() as { error?: string; rows?: import("@/lib/studio/keyword-research").KeywordEvidence[]; cost?: number };
-  if (!response.ok || !data.rows) throw new Error(data.error || "Could not look up keyword metrics.");
-  return { rows: data.rows, cost: data.cost };
+  const data = await response.json() as { error?: string; lookup?: KeywordLookup };
+  if (!response.ok || !data.lookup) throw new Error(data.error || "Could not queue keyword research.");
+  return data.lookup;
 }
 
 export const studioMediaUrl = (id: string, download = false) => `/api/studio/media?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;

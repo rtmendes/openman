@@ -382,7 +382,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
-          <TopicResearch keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
+          <TopicResearch videoId={id} keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
             board={spec.keywordBoard ?? blankKeywordBoard} dataForSeo={Boolean(providers?.dataForSeo)}
             onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
             signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}

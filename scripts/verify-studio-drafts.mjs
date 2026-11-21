@@ -16,7 +16,9 @@ const db = createClient(url, key, {
 const testId = `studio-smoke-${randomUUID()}`;
 const object = `${testId}/reference.txt`;
 const bucket = db.storage.from("mahara-studio-private");
+const keywordObject = `${testId}/keywords-${randomUUID()}-${randomUUID()}-result.json`;
 let uploaded = false;
+let keywordUploaded = false;
 async function save(revision, items) {
   const { data, error } = await db.rpc("studio_save_drafts", { p_user: testId, p_revision: revision, p_items: items });
   assert.ok(!error, `Draft save RPC failed (${error?.code ?? "unknown"}).`);
@@ -41,11 +43,22 @@ try {
   assert.equal(await (await fetch(signed.data.signedUrl)).text(), file);
   const publicResponse = await fetch(`${url}/storage/v1/object/public/mahara-studio-private/${object}`);
   assert.ok(!publicResponse.ok, "The private object was readable without a signature.");
-  console.log("Studio smoke test passed: original version preserved, stale write rejected, signed upload and download verified.");
+
+  const sampleReport = { result: { rows: [{ term: "Private synthetic keyword" }], cost: 0 } };
+  const stored = await bucket.upload(keywordObject, Buffer.from(JSON.stringify(sampleReport)), { contentType: "application/json", upsert: false });
+  assert.ok(!stored.error, "The server cannot save an immutable keyword report.");
+  keywordUploaded = true;
+  const listed = await bucket.list(testId, { search: "keywords-", sortBy: { column: "created_at", order: "desc" }, limit: 20 });
+  assert.ok(!listed.error && listed.data.some(({ name }) => `${testId}/${name}` === keywordObject), "The saved keyword report is missing from private storage.");
+  const recovered = await bucket.download(keywordObject);
+  assert.ok(!recovered.error && recovered.data);
+  assert.deepEqual(JSON.parse(await recovered.data.text()), sampleReport);
+  console.log("Studio smoke test passed: draft history, private signed media, and server-side keyword report recovery.");
 } finally {
-  if (uploaded) {
-    const removed = await bucket.remove([object]);
-    assert.ok(!removed.error, "Could not remove the Studio smoke-test object.");
+  const objects = [...(uploaded ? [object] : []), ...(keywordUploaded ? [keywordObject] : [])];
+  if (objects.length) {
+    const removed = await bucket.remove(objects);
+    assert.ok(!removed.error, "Could not remove the Studio smoke-test objects.");
   }
   const removed = await db.from("studio_draft_versions").delete().eq("user_id", testId);
   assert.ok(!removed.error, "Could not remove the Studio smoke-test revisions.");

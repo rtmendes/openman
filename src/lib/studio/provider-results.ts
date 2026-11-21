@@ -39,6 +39,7 @@ const channel = z.object({
   name: optionalText,
   title: optionalText,
   details: z.unknown(),
+  scripts_count: z.coerce.number().int().nonnegative().nullish(),
 });
 const script = z.object({
   id: providerId,
@@ -51,8 +52,8 @@ const envelope = <T extends z.ZodType>(shape: T) => z.object({ success: z.litera
 export function readSubscribrChannels(value: unknown) {
   const page = envelope(z.array(channel)).parse(value);
   const pagination = page.pagination ?? page.meta;
-  return { entries: page.data.map(({ id, yt_handle, details, name, title }) => ({
-    id, title: z.object({ title: optionalText }).safeParse(details).data?.title || title || name || yt_handle || `Channel ${id}`,
+  return { entries: page.data.map(({ id, yt_handle, details, name, title, scripts_count }) => ({
+    id, title: z.object({ title: optionalText }).safeParse(details).data?.title || title || name || yt_handle || `Channel ${id}`, scriptCount: scripts_count ?? undefined,
   })), page: pagination?.current_page ?? 1, lastPage: Math.max(1, pagination?.last_page ?? 1) };
 }
 export function readSubscribrScripts(value: unknown) {

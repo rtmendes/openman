@@ -5,8 +5,8 @@ import { searchStudioTopic, type StudioResearchSource } from "@/lib/agent/client
 import { suggestedSearches, type KeywordBoard } from "@/lib/studio/keyword-research";
 import { ResearchKeywordBoard } from "./keyword-board";
 
-export function TopicResearch({ keyword, language, signedIn, savedLinks, onSave, audience, board, onBoard, dataForSeo }: {
-  keyword: string; signedIn: boolean; savedLinks: string[]; onSave: (url: string) => void;
+export function TopicResearch({ videoId, keyword, language, signedIn, savedLinks, onSave, audience, board, onBoard, dataForSeo }: {
+  videoId: string; keyword: string; signedIn: boolean; savedLinks: string[]; onSave: (url: string) => void;
   audience: string; language?: string; board: KeywordBoard; onBoard: (patch: (board: KeywordBoard) => KeywordBoard) => void; dataForSeo: boolean;
 }) {
   const [override, setOverride] = useState<string>();
@@ -17,7 +17,7 @@ export function TopicResearch({ keyword, language, signedIn, savedLinks, onSave,
   const encoded = encodeURIComponent(topic);
   return <details className="production-wide production-inputGroup">
     <summary>Research this topic</summary>
-    <ResearchKeywordBoard topic={keyword} audience={audience} value={board} onChange={onBoard} dataForSeo={dataForSeo} />
+    <ResearchKeywordBoard videoId={videoId} topic={keyword} audience={audience} value={board} onChange={onBoard} dataForSeo={dataForSeo} />
     <details className="studio-keyword-import">
     <summary>Background and YouTube research</summary>
     <label>Public search phrase<input maxLength={180} value={override ?? (board.seed || keyword)} onChange={(event) => {

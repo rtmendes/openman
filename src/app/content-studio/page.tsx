@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import { createHash } from "node:crypto";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { getSession } from "@/lib/session";
 import { operatorFor } from "@/lib/observability/operator";
 import { ContentStudio } from "./content-studio";
@@ -17,6 +18,7 @@ export default function Page() {
 }
 
 async function StudioSession() {
+  await connection();
   const session = await getSession();
   const owner = session && process.env.APP_DB_SCHEMA === "mahara" && (await operatorFor(session))?.owner;
   const draftKey = session && process.env.APP_DB_SCHEMA === "mahara"

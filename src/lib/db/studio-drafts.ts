@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { db, fail } from "./client";
+import type { KeywordLookup } from "@/lib/studio/keyword-research";
 
 const bucket = () => db().storage.from("mahara-studio-private");
 const folder = (userId: string) => createHash("sha256").update(userId).digest("hex");
@@ -35,6 +36,42 @@ export async function signStudioMedia(userId: string, id: string, download: bool
   const { data, error } = await bucket().createSignedUrl(`${folder(userId)}/${id}`, 900, { download });
   if (error) return null;
   return data.signedUrl;
+}
+
+const keywordFile = (videoId: string, id: string, part: "start" | "result") => `keywords-${videoId}-${id}-${part}.json`;
+
+async function readKeywordFile(userId: string, name: string): Promise<KeywordLookup | null> {
+  const { data, error } = await bucket().download(`${folder(userId)}/${name}`);
+  if (error || !data) return null;
+  return JSON.parse(await data.text()) as KeywordLookup;
+}
+
+export async function recentStudioKeywordLookup(userId: string, videoId: string, id?: string) {
+  let name = id ? keywordFile(videoId, id, "start") : undefined;
+  if (!name) {
+    const { data, error } = await bucket().list(folder(userId), { search: `keywords-${videoId}-`,
+      limit: 20, sortBy: { column: "created_at", order: "desc" } });
+    if (error) throw new Error("Could not list Studio keyword reports.");
+    name = data?.find((file) => file.name.startsWith(`keywords-${videoId}-`) && file.name.endsWith("-start.json"))?.name;
+  }
+  if (!name) return null;
+  const lookup = await readKeywordFile(userId, name);
+  if (!lookup) return null;
+  const finished = await readKeywordFile(userId, keywordFile(videoId, lookup.id, "result"));
+  if (finished) return finished;
+  if (Date.now() - lookup.requestedAt > 240_000) {
+    return { ...lookup, result: { error: "This lookup could not be confirmed. Check DataForSEO activity before retrying." } };
+  }
+  return lookup;
+}
+
+export async function saveStudioKeywordLookup(userId: string, videoId: string, lookup: KeywordLookup) {
+  const name = keywordFile(videoId, lookup.id, lookup.result ? "result" : "start");
+  const { error } = await bucket().upload(`${folder(userId)}/${name}`, Buffer.from(JSON.stringify(lookup)),
+    { contentType: "application/json", upsert: false });
+  if (!error) return true;
+  if (await readKeywordFile(userId, name)) return false;
+  throw new Error("Could not save the private keyword lookup.");
 }
 
 export async function deleteStudioMedia(userId: string) {

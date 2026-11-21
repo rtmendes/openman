@@ -31,6 +31,10 @@ export const keywordBoardSchema = z.object({
 });
 export type KeywordEvidence = z.infer<typeof keywordEvidenceSchema>;
 export type KeywordBoard = z.infer<typeof keywordBoardSchema>;
+export type KeywordLookup = {
+  id: string; seed: string; market: string; language: string; requestedAt: number;
+  result?: { rows: KeywordEvidence[]; cost?: number } | { error: string };
+};
 
 export const keywordId = (row: KeywordEvidence) => JSON.stringify([row.provider, row.market, row.language ?? "", row.term.toLowerCase()]);
 

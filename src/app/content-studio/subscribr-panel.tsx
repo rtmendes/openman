@@ -9,6 +9,8 @@ export function SubscribrPanel({ connected, current, onImport }: {
 }) {
   const [channels, setChannels] = useState<Awaited<ReturnType<typeof listSubscribrChannels>>>();
   const [channel, setChannel] = useState(0);
+  const [channelSearch, setChannelSearch] = useState("");
+  const [usedChannelSearch, setUsedChannelSearch] = useState("");
   const [scripts, setScripts] = useState<Awaited<ReturnType<typeof listSubscribrScripts>>>();
   const [search, setSearch] = useState("");
   const [preview, setPreview] = useState<(SubscribrNarration & { title: string })>();
@@ -33,21 +35,26 @@ export function SubscribrPanel({ connected, current, onImport }: {
     <summary>Use a Subscribr script</summary>
     {current && <p role="status">Saved as source material for this project · {current.title} · {current.kind} v{current.version}</p>}
     {connected && <fieldset disabled={pending} className="production-fields">
+      <label>Filter Subscribr channels<input value={channelSearch} maxLength={180} onChange={(event) => setChannelSearch(event.target.value)} /></label>
       <div className="content-studio-runActions production-wide">
         <button type="button" onClick={() => void load(async () => {
-          setChannels(await listSubscribrChannels());
+          setChannels(await listSubscribrChannels(1, channelSearch));
+          setUsedChannelSearch(channelSearch);
           setChannel(0); setScripts(undefined); setPreview(undefined);
         })}>Browse Subscribr channels</button>
       </div>
       {channels && <>
         <label>Subscribr channel<select value={channel} onChange={(event) => {
           setChannel(Number(event.target.value)); setScripts(undefined); setPreview(undefined);
-        }}><option value={0}>Choose a channel</option>{channels.entries.map(({ id, title }) => <option key={id} value={id}>{title}</option>)}</select></label>
+        }}><option value={0}>Choose a channel</option>{channels.entries.map(({ id, title, scriptCount }) => <option key={id} value={id}>
+          {title}{scriptCount === undefined ? "" : ` · ${scriptCount} scripts`}
+        </option>)}</select></label>
         <div className="content-studio-runActions">
-          {channels.page > 1 && <button type="button" onClick={() => void load(async () => setChannels(await listSubscribrChannels(channels.page - 1)))}>Previous channels</button>}
-          {channels.page < channels.lastPage && <button type="button" onClick={() => void load(async () => setChannels(await listSubscribrChannels(channels.page + 1)))}>More channels</button>}
+          {channels.page > 1 && <button type="button" onClick={() => void load(async () => setChannels(await listSubscribrChannels(channels.page - 1, usedChannelSearch)))}>Previous channels</button>}
+          {channels.page < channels.lastPage && <button type="button" onClick={() => void load(async () => setChannels(await listSubscribrChannels(channels.page + 1, usedChannelSearch)))}>More channels</button>}
         </div>
       </>}
+      {channels?.entries.length === 0 && <p>No channels match the filter.</p>}
       {channel > 0 && <div className="studio-keyword-inputs production-wide">
         <label>Filter scripts<input value={search} maxLength={180} onChange={(event) => setSearch(event.target.value)} /></label>
         <div className="content-studio-runActions"><button type="button" onClick={() => void load(async () => {

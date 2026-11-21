@@ -1,24 +1,27 @@
 import { z } from "zod";
+import { after } from "next/server";
 import { readBody } from "@/lib/agent/server/http";
+import { recentStudioKeywordLookup, saveStudioKeywordLookup, studioDraft } from "@/lib/db/studio-drafts";
 import { readJsonLimited } from "@/lib/net/body";
 import { operatorFor } from "@/lib/observability/operator";
 import { logEvent } from "@/lib/observability/log";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
-import { keywordBatchSize, keywordMarkets } from "@/lib/studio/keyword-research";
+import { keywordBatchSize, keywordMarkets, type KeywordLookup } from "@/lib/studio/keyword-research";
 import { readDataForSeoKeywords, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } from "@/lib/studio/provider-results";
 import { consumeUsage, UsageLimitError } from "@/lib/usage";
 
 const market = z.enum(["US", "GB", "CA", "AU"]);
 const language = z.enum(["en", "es", "fr"]);
-const demand = z.object({ seed: z.string().trim().min(2).max(180), market, language, confirmCharge: z.literal(true) });
+const demand = z.object({ video: z.uuid(), request: z.uuid(), seed: z.string().trim().min(2).max(180), market, language, confirmCharge: z.literal(true) });
 const id = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const page = z.coerce.number().int().min(1).max(1000).default(1);
 const requests = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }),
   z.object({ action: z.literal("keyword-activity"), q: z.string().trim().min(2).max(180) }),
   z.object({ action: z.literal("keyword-sandbox") }),
-  z.object({ action: z.literal("channels"), page }),
+  z.object({ action: z.literal("keyword-result"), video: z.uuid(), request: z.uuid().optional() }),
+  z.object({ action: z.literal("channels"), page, search: z.string().trim().max(180).default("") }),
   z.object({ action: z.literal("scripts"), channel: id, page, search: z.string().trim().max(180).default("") }),
   z.object({ action: z.literal("narration"), script: id }),
 ]);
@@ -40,7 +43,8 @@ async function providerFetch(url: URL, authorization: string, body?: string) {
   return fetch(url, {
     method: body ? "POST" : "GET", body,
     headers: { Authorization: authorization, Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-    redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(body ? 25_000 : 12_000),
+    redirect: "manual", cache: "no-store",
+    signal: AbortSignal.timeout(url.origin === dataForSeo && url.pathname === keywordPath ? 180_000 : 15_000),
   });
 }
 
@@ -78,6 +82,9 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
   const input = requests.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!input.success) return reply({ error: "Choose a valid provider request." }, 400);
   if (input.data.action === "status") return reply({ dataForSeo: Boolean(dfsAuth()), subscribr: Boolean(subscribrToken()) });
+  if (input.data.action === "keyword-result") return reply({
+    lookup: await recentStudioKeywordLookup(session.userId, input.data.video, input.data.request),
+  });
   if (input.data.action === "keyword-activity") {
     try { return await readKeywordActivity(input.data.q); }
     catch { return reply({ error: "Could not verify recent DataForSEO activity." }, 502); }
@@ -105,7 +112,7 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
     url.searchParams.set("page", String(request.page));
     url.searchParams.set("per_page", "30");
   }
-  if (request.action === "scripts" && request.search) url.searchParams.set("search", request.search);
+  if ("search" in request && request.search) url.searchParams.set("search", request.search);
   try {
     const upstream = await providerFetch(url, `Bearer ${token}`);
     if (upstream.status === 401 || upstream.status === 403) return reply({ error: "Subscribr denied access. Check the token’s channel and script read permissions." }, 502);
@@ -125,6 +132,26 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
   }
 });
 
+async function completeKeywordLookup(userId: string, request: z.infer<typeof demand>, auth: string, started: KeywordLookup) {
+  let result: NonNullable<KeywordLookup["result"]>;
+  try {
+    await consumeUsage(userId, "studio_keyword_lookups");
+    const upstream = await providerFetch(new URL(keywordPath, dataForSeo), `Basic ${auth}`,
+      keywordPayload(request.seed, keywordMarkets[request.market], request.language));
+    if (!upstream.ok) result = { error: `DataForSEO lookup failed (HTTP ${upstream.status}). Check account activity before retrying.` };
+    else result = readDataForSeoKeywords(await readJsonLimited(upstream, 2_000_000), request.market, request.language, new Date().toISOString().slice(0, 10));
+  } catch (error) {
+    if (error instanceof UsageLimitError) result = { error: error.message };
+    else {
+      const detail = error instanceof z.ZodError ? safeIssues(error) : undefined;
+      await logEvent("warn", "studio.dataforseo_failed", { userId, data: { detail, failureType: error instanceof Error ? error.name : "unknown" } });
+      result = { error: "Studio could not capture the returned report. Check DataForSEO activity before retrying." };
+    }
+  }
+  try { await saveStudioKeywordLookup(userId, request.video, { ...started, result }); }
+  catch { await logEvent("error", "studio.dataforseo_save", { userId }); }
+}
+
 export const POST = withErrorReporting("studio.providers.keywordLookup", async (req) => {
   const session = await requireSession();
   if (process.env.APP_DB_SCHEMA !== "mahara" || !(await operatorFor(session))?.owner) return reply({ error: "Paid keyword lookup is available to the Studio owner." }, 404);
@@ -132,15 +159,15 @@ export const POST = withErrorReporting("studio.providers.keywordLookup", async (
   if (!auth) return reply({ error: "DataForSEO is not connected. You can still import keyword reports." }, 503);
   const input = await readBody(req, demand, 2500);
   if ("error" in input) return input.error;
-  try { await consumeUsage(session.userId, "studio_keyword_lookups"); }
-  catch (err) { if (err instanceof UsageLimitError) return reply({ error: err.message }, err.status); throw err; }
-  try {
-    const upstream = await providerFetch(new URL(keywordPath, dataForSeo), `Basic ${auth}`,
-      keywordPayload(input.data.seed, keywordMarkets[input.data.market], input.data.language));
-    if (!upstream.ok) return reply({ error: `DataForSEO lookup failed (HTTP ${upstream.status}). Check account activity before retrying.` }, 502);
-    return reply(readDataForSeoKeywords(await readJsonLimited(upstream, 2_000_000), input.data.market, input.data.language, new Date().toISOString().slice(0, 10)));
-  } catch (error) {
-    if (error instanceof z.ZodError) await logEvent("warn", "studio.dataforseo_format", { userId: session.userId, data: { detail: safeIssues(error) } });
-    return reply({ error: "DataForSEO did not return a usable report. Check the connection and account activity before retrying." }, 502);
+  const draft = await studioDraft(session.userId);
+  if (!(draft?.items as { spec?: { id?: string } }[] | undefined)?.some((item) => item.spec?.id === input.data.video)) {
+    return reply({ error: "Save this Studio project before requesting paid research." }, 409);
   }
+  const active = await recentStudioKeywordLookup(session.userId, input.data.video);
+  if (active && !active.result) return reply({ lookup: active }, 202);
+  const lookup: KeywordLookup = { id: input.data.request, requestedAt: Date.now(), seed: input.data.seed, market: input.data.market, language: input.data.language };
+  if (await saveStudioKeywordLookup(session.userId, input.data.video, lookup)) {
+    after(() => completeKeywordLookup(session.userId, input.data, auth, lookup));
+  }
+  return reply({ lookup }, 202);
 });
