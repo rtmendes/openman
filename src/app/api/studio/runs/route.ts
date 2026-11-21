@@ -37,7 +37,9 @@ export const POST = withErrorReporting("studio.runs.start", async (req) => {
     throw error;
   }
   const stage = input.kind === "workflow" ? input.stage ?? 0 : finalStudioStage;
-  const research = input.kind === "workflow" && input.stage === 2 ? await approvedStudioResearch(session.userId, input.videoId) : undefined;
+  const useResearch = input.kind === "script" || (input.kind === "workflow" && (input.stage === 2 || input.stage === finalStudioStage)) ||
+    (input.kind === "suggestion" && input.suggestion.action === "story-pitches");
+  const research = useResearch ? await approvedStudioResearch(session.userId, input.videoId, snapshot.brief.topic, snapshot.kit) : undefined;
   const run = await addStudioRun(session.userId, input, snapshot, stage, research ? [research] : []);
   if (!run) {
     const duplicate = await studioRun(session.userId, input.id);

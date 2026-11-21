@@ -45,6 +45,9 @@ async function studioRunRequest<T>(url: string, method = "GET", body?: StartStud
 export const listStudioRuns = (videoId: string) => studioRunRequest<{ runs: StudioRun[] }>(`/api/studio/runs?videoId=${encodeURIComponent(videoId)}`);
 export const startStudioRun = (input: StartStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "POST", input);
 export const decideStudioRun = (input: ChangeStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "PATCH", input);
+export type StudioResearchSource = { title: string; description?: string; url: string };
+export const searchStudioTopic = (topic: string) =>
+  studioRunRequest<{ sources: StudioResearchSource[] }>(`/api/studio/research?q=${encodeURIComponent(topic)}`);
 
 export const studioMediaUrl = (id: string, download = false) => `/api/studio/media?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;
 export async function uploadStudioMedia(file: File): Promise<StudioMedia> {

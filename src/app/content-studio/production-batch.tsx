@@ -11,7 +11,9 @@ import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } f
 import { NarrationOptions, ReferenceInputs } from "./production-inputs";
 import { ProjectAgent } from "./project-agent";
 import { StoryWorkflowPanel } from "./story-workflow-panel";
+import { TopicResearch } from "./topic-research";
 import { storyLabels, storyStyles } from "./story-workflow";
+import type { StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
 
@@ -28,6 +30,7 @@ type Item = {
   variationOf?: string;
   variationLabel?: string;
   renders?: StudioMedia[];
+  storyEdit?: StoryEdit;
 };
 
 const storageKey = "mahara:video-production:v1";
@@ -119,8 +122,16 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
 
   function edit(id: string, change: Partial<VideoSpec> | ((spec: VideoSpec) => Partial<VideoSpec>)) {
     clearPreview(id);
-    patch(id, (item) => ({ ...item, spec: { ...item.spec, ...(typeof change === "function" ? change(item.spec) : change) },
-      approved: undefined, stale: Boolean(item.script.trim()), context: undefined, error: undefined }));
+    patch(id, (item) => {
+      const changes = typeof change === "function" ? change(item.spec) : change;
+      const spec = { ...item.spec, ...changes };
+      if (spec.storyStyle && Object.keys(changes).length === 1 && "media" in changes) {
+        const approved = item.approved ? { ...item.approved, spec } : undefined;
+        const storyEdit = item.storyEdit ? { ...item.storyEdit, storyboardApproved: undefined } : undefined;
+        return { ...item, spec, approved, storyEdit };
+      }
+      return { ...item, spec, approved: undefined, storyEdit: undefined, stale: Boolean(item.script.trim()), context: undefined, error: undefined };
+    });
   }
 
   async function contextFor(item: Item, cached?: string) {
@@ -202,9 +213,9 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   }
 
   function copyDraft(item: Item, keepRender: boolean): Item {
-    const { spec, kit, script, stale, variationLabel } = item;
+    const { spec, kit, script, stale, variationLabel, storyEdit } = item;
     return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel,
-      ...(keepRender ? { renders: item.renders } : {}) };
+      ...(keepRender ? { renders: item.renders, storyEdit } : {}) };
   }
 
   function addCopies(source: Item[], keepRender: boolean) {
@@ -242,8 +253,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   function applySuggestion(item: Item, run: StudioRun, option: StudioAlternative, copy: boolean) {
     const selection = run.input.suggestion;
     if (!selection || selection.action === "review") return;
-    if (selection.action === "angles") {
-      if (copy) addCopies([{ spec: { ...run.input.spec, reference: [run.input.spec.reference, "Creative direction: " + option.text].filter(Boolean).join("\n\n").slice(0, 6000) },
+    if (selection.action === "angles" || selection.action === "story-pitches") {
+      const direction = ["Creative direction: " + option.text, option.overlay && "Thumbnail text: " + option.overlay,
+        option.sourceToCheck && "Source or assumption to check: " + option.sourceToCheck].filter(Boolean).join("\n");
+      if (copy) addCopies([{ spec: { ...run.input.spec, reference: [direction, run.input.spec.reference].filter(Boolean).join("\n\n").slice(0, 6000) },
         kit: run.input.kit, script: "", variationLabel: option.label }], false);
       return;
     }
@@ -364,6 +377,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
+          <TopicResearch keyword={spec.keyword} signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
+            onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
           <label>Brand kit<select value={item.kit} onChange={(e) => {
             const value = e.target.value;
             const reuse = items.find(({ spec: other }) => other.id === value);
@@ -411,7 +426,9 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
           <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
-        {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} />}
+        {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
+          onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
+          onRender={(file) => previewFile(item, file)} cloud={Boolean(draftKey)} />}
         {item.taskId && <Link href={`/app/task/${encodeURIComponent(item.taskId)}`}>Open script task</Link>}
         {plan && <details className="production-shots" open={!item.approved}>
           <summary>{plan.title} · {plan.shots.length} shots</summary>
@@ -460,7 +477,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <button type="button" disabled={locked || item.stale || !spec.keyword.trim()} onClick={() => void approve(item)}>Approve script and shots</button>
         </div>}
         {(item.approved || item.renders?.length) ? <div className="production-preview">
-          {item.approved && <label>{draftKey ? "Save and preview a rendered MP4" : "Preview a rendered MP4"}<input type="file" accept="video/mp4,.mp4" disabled={locked} onChange={(e) => {
+          {item.approved && <label>{draftKey ? "Save and preview a rendered video" : "Preview a rendered video"}<input type="file" accept="video/mp4,video/webm,.mp4,.webm" disabled={locked} onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void previewFile(item, file);
             e.target.value = "";
@@ -476,11 +493,12 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             </li>)}
           </ul>}
           <p>{draftKey ? "Saved renders are private. Review them here before sharing." : "Playback stays on this device."}</p>
+          {previews[id] && <a href={previews[id]} download>Download current preview</a>}
           {previewUrl && <video controls playsInline preload="metadata" src={previewUrl} onLoadedMetadata={(e) => {
             const video = e.currentTarget;
             const aspect = video.videoWidth / video.videoHeight;
             const ratios = chosenFrames(spec);
-            const matches = Math.abs(video.duration - spec.duration) <= 0.1 && ratios.some((ratio) => {
+            const matches = (!Number.isFinite(video.duration) || Math.abs(video.duration - spec.duration) <= (spec.storyStyle ? 0.25 : 0.1)) && ratios.some((ratio) => {
               const [width, height] = videoDimensions[ratio];
               return Math.abs(aspect - width / height) < 0.01;
             });

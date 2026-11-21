@@ -14,9 +14,9 @@ export const moraViralMaxSeconds = 120;
 export const storySteps = [
   { time: 160, label: "Research and shortlist", detail: "Pitch ten ideas with an opening image, hook, payoff and source to check. Choose one before scripting." },
   { time: 181, label: "Approve script", detail: "Choose the runtime and check the narration against the facts and available footage." },
-  { time: 205, label: "Record narration", detail: "Use your own voice or an approved voice tool. Time captions to the recorded audio." },
+  { time: 205, label: "Attach narration", detail: "Attach an audio recording and import timed captions, or use draft captions for a silent animatic." },
   { time: 221, label: "Review the storyboard", detail: "Match shots to the spoken beats. Check a contact sheet for blank frames, timing and caption legibility." },
-  { time: 237, label: "Render and review privately", detail: "Preview the edit locally, then import the finished MP4 here for private review." },
+  { time: 237, label: "Render and review privately", detail: "Render in Studio or bring back a video rendered with the OpenCode export." },
 ] as const;
 
 export function moraViralBrief({ spec, plan }: ApprovedVideo) {

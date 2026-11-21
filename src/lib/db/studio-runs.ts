@@ -38,9 +38,10 @@ export async function studioRun(userId: string, id: string) {
   return data as StudioRun | null;
 }
 
-export async function approvedStudioResearch(userId: string, videoId: string) {
+export async function approvedStudioResearch(userId: string, videoId: string, topic: string, kit: StudioRunInput["kit"]) {
   const { data, error } = await db().from("studio_runs").select("state").eq("user_id", userId).eq("video_id", videoId)
-    .eq("kind", "workflow").eq("phase", "complete").contains("state", { outputs: [{ result: { stage: 1, status: "ready" } }] })
+    .eq("kind", "workflow").eq("phase", "complete").eq("input->brief->>topic", topic).eq("input->>kit", kit)
+    .contains("state", { outputs: [{ result: { stage: 1, status: "ready" } }] })
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) fail("find approved Studio research", error);
   return (data?.state as StudioRunState | undefined)?.outputs.find(({ result }) => result.stage === 1 && result.status === "ready");

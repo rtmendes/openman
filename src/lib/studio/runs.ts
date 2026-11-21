@@ -7,6 +7,7 @@ import type { StudioPackaging } from "./packaging";
 
 export const suggestionActions = {
   angles: "Suggest three distinct creative angles",
+  "story-pitches": "Research-backed story pitches",
   hook: "Write three alternate opening hooks",
   narration: "Rewrite this narration",
   caption: "Write three social caption alternatives",
@@ -15,7 +16,7 @@ export const suggestionActions = {
 } as const;
 
 const suggestion = z.object({
-  action: z.enum(["angles", "hook", "narration", "caption", "visual", "review"]),
+  action: z.enum(["angles", "story-pitches", "hook", "narration", "caption", "visual", "review"]),
   shot: z.number().int().min(0).max(23).default(0),
   direction: z.string().trim().max(500).default(""),
 });
@@ -41,14 +42,23 @@ const alternativeSchema = z.object({
   overlay: z.string().trim().min(1).max(100).optional(),
   overlayPosition: z.enum(overlayPositions).optional(),
   location: z.string().trim().max(90).optional(),
+  sourceToCheck: z.string().trim().min(1).max(400).optional(),
 });
-const suggestionsSchema = z.object({ alternatives: z.array(alternativeSchema).min(1).max(5) });
+const suggestionsSchema = z.object({ alternatives: z.array(alternativeSchema).min(1).max(10) });
 export type StudioAlternative = z.infer<typeof alternativeSchema>;
 
 export function readStudioSuggestions(output: string, selection: StudioSuggestion) {
   const raw = output.trim();
   const json = raw.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1] ?? raw;
   const { alternatives } = suggestionsSchema.parse(JSON.parse(json));
+  if (selection.action === "story-pitches") {
+    if (alternatives.length !== 10 || new Set(alternatives.map(({ label }) => label.toLowerCase())).size !== 10 ||
+        alternatives.some(({ overlay, sourceToCheck }) => !overlay || overlay.length > 36 || !sourceToCheck)) {
+      throw new Error("Provide ten distinct story pitches with thumbnail copy and a fact check or fiction note for each.");
+    }
+  } else if (alternatives.length > 5) {
+    throw new Error("Provide up to five alternatives.");
+  }
   if (["angles", "hook", "caption"].includes(selection.action) && alternatives.length !== 3) {
     throw new Error("Provide three alternatives.");
   }

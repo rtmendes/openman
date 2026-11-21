@@ -123,6 +123,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       </select></label>
       <label>Direction <span className="production-hint">(optional)</span><textarea maxLength={500} rows={2} value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="Keep the punchline dry. Shorten the setup." /></label>
       <div className="studio-assistant-actions">
+        {spec.storyStyle && <button type="button" disabled={baseDisabled || activeKind("suggestion")} onClick={() => suggest("story-pitches")}>Draft 10 story pitches</button>}
         {([ ["angles", "Suggest angles"], ["hook", "Write hooks"], ["narration", "Rewrite narration"], ["caption", "Write captions"], ["visual", "Suggest layouts"], ["review", "Review draft"] ] as const).map(([action, label]) => (
           <button type="button" key={action} disabled={baseDisabled || activeKind("suggestion") || (action !== "angles" && !plan)} onClick={() => suggest(action)}>{label}</button>
         ))}
@@ -138,6 +139,9 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
         <button type="button" disabled={baseDisabled || activeKind("script")} onClick={() => void start({ kind: "script" })}>Generate script</button>
         <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow" })}>Run full workflow</button>
         <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow", stage })}>Run selected stage</button>
+        <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => {
+          onStage(1); void start({ kind: "workflow", stage: 1 });
+        }}>Scan YouTube with agent</button>
       </div>
       <details><summary>Stage instructions</summary><ol>{stages[stage].instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
       <p className="production-hint">Runs use agent credits.</p>
@@ -184,8 +188,9 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
             <div className="studio-layout-guides" aria-hidden /><figcaption data-placement={option.overlayPosition ?? "lower"}>{option.overlay}</figcaption>
           </figure>}
           <p>{option.text}</p><small>{option.reason}</small>
+          {selected?.action === "story-pitches" && <p>Thumbnail text: {option.overlay} <br />Check before scripting: {option.sourceToCheck}</p>}
           {selected?.action !== "review" && <div className="studio-assistant-actions">
-            {selected?.action !== "angles" && <button type="button" disabled={!matchingDraft} onClick={() => onSuggestion(run, option, false)}>Apply</button>}
+            {selected?.action !== "angles" && selected?.action !== "story-pitches" && <button type="button" disabled={!matchingDraft} onClick={() => onSuggestion(run, option, false)}>Apply</button>}
             <button type="button" disabled={!canCopy} onClick={() => onSuggestion(run, option, true)}>Save as variation</button>
           </div>}
         </div>)}

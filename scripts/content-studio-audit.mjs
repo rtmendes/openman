@@ -152,3 +152,19 @@ assert.match(story["video-01/OPEN-CODE.md"], /NHEurGsycYM&t=237s/);
 assert.match(story["video-01/MoraViral-brief.md"], /The thermostat blinked first/);
 assert.equal(exported["video-01/OPEN-CODE.md"], undefined);
 console.log("PASS optional OpenCode skill, tutorial checkpoints, and separate MoraViral handoff");
+
+const { parseStorySubtitles, storyDraftCues, storyShotAt } = require("../src/app/content-studio/story-timeline.ts");
+const srt = "1\r\n00:00:00,500 --> 00:00:03,000\r\nTalks begin.\r\n\r\n2\r\n00:00:04,000 --> 00:00:06,500\r\nThe thermostat blinked.";
+assert.equal(parseStorySubtitles(srt, 30)[1].end, 6.5);
+assert.throws(() => parseStorySubtitles(srt.replace("00:00:04,000", "00:00:01,000"), 30), /overlaps/);
+assert.throws(() => parseStorySubtitles(srt, 6), /runtime/);
+assert.equal(storyShotAt(finishedPlan, 4), 1);
+assert.equal(storyDraftCues(finishedPlan).at(-1).end, 30);
+const pitchRun = { ...single, input: { ...single.input, script: "", suggestion: { action: "story-pitches", shot: 0, direction: "" } } };
+assert.match(promptForStudioRun(pitchRun), /Fixture for outliers/);
+const pitches = { alternatives: Array.from({ length: 10 }, (_, index) => ({
+  label: `Pitch ${index}`, text: "First image, hook and ending.", overlay: "THERMOSTAT TALKS", reason: "Shared premise.", sourceToCheck: "Fictional scenario.",
+})) };
+assert.equal(checkedStudioOutput(pitchRun, JSON.stringify(pitches)).state.alternatives.length, 10);
+assert.throws(() => checkedStudioOutput(pitchRun, JSON.stringify({ alternatives: pitches.alternatives.slice(1) })), /ten distinct/);
+console.log("PASS story pitch count and evidence, SRT import, and shot timing");

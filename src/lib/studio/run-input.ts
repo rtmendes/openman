@@ -48,7 +48,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   const notes = [spec.reference, spec.referenceLinks?.join("\n"), `Frames: ${chosenFrames(spec).join(", ")}`,
     spec.storyStyle ? `Production direction: ${storyLabels[spec.storyStyle]}` : "",
     spec.media?.length ? `Private reference filenames: ${spec.media.map(({ name }) => name).join(", ")}` : ""].filter(Boolean).join("\n\n");
-  if (input.kind === "suggestion" && input.suggestion.action !== "angles") {
+  if (input.kind === "suggestion" && !["angles", "story-pitches"].includes(input.suggestion.action)) {
     try {
       const plan = parseVideoPlan(script);
       if (input.suggestion.shot >= plan.shots.length) throw new Error("Shot no longer exists.");
