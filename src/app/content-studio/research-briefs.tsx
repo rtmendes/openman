@@ -35,7 +35,7 @@ export function ResearchBriefs({ spec, board, audience, youtube, onChange }: {
       data.length > 0 && <div className="studio-research-groups" key={title}>
         <h5>{title}</h5>
         {(showAll ? data : data.slice(0, 5)).map((group) => <details className="studio-keyword-import" key={group.id}>
-          <summary>{group.label} <small>{group.members.length} {group.kind === "youtube" ? "videos" : "keyword records"}</small></summary>
+          <summary>{group.label} <small>{group.members.length} {group.kind === "youtube" ? "video" : "keyword record"}{group.members.length === 1 ? "" : "s"}</small></summary>
           <p className="production-hint">{researchEvidenceLabels[group.kind]} · {group.scope}</p>
           <ul className="studio-research-evidence">{group.members.map(({ title, source, detail }, index) => <li key={`${title}-${index}`}>
             {source ? <a href={source} target="_blank" rel="noreferrer">{title}</a> : <span>{title}</span>}
@@ -73,9 +73,10 @@ export function ResearchBriefs({ spec, board, audience, youtube, onChange }: {
       <label>What to verify<textarea rows={2} maxLength={600} value={current.check} onChange={(event) => patchBrief(current, { check: event.target.value })} /></label>
       <details>
         <summary>Research behind this brief</summary>
-        <ul className="studio-research-evidence">{current.terms.map((term) => <li key={term}>{term}</li>)}</ul>
-        {!!current.sources.length && <ul className="studio-research-evidence">{current.sources.map(({ title, url }) =>
-          <li key={url}><a href={url} target="_blank" rel="noreferrer">{title}</a></li>)}</ul>}
+        <ul className="studio-research-evidence">
+          {current.terms.filter((term) => !current.sources.some(({ title }) => title === term)).map((term) => <li key={term}>{term}</li>)}
+          {current.sources.map(({ title, url }) => <li key={url}><a href={url} target="_blank" rel="noreferrer">{title}</a></li>)}
+        </ul>
       </details>
       <div className="content-studio-runActions">
         <button type="button" disabled={!current.angle.trim() || !current.beats.trim()} onClick={() => {
