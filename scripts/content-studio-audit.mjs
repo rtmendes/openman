@@ -242,3 +242,62 @@ if (process.argv[2]) {
   assert.match(researchBriefEvidence([brief], brief.id), /original footage and dialogue/);
   console.log(`PASS saved Second Spring research → ${groups.length} themes → ${brief.title} with ${brief.sources.length} source videos → 30-second brief`);
 }
+
+const { emptyOffer, missingOfferFields, savedContentInventory, usableOffer } = require("../src/lib/studio/campaign-input.ts");
+const { startStudioRunSchema } = require("../src/lib/studio/runs.ts");
+const primaryId = "6902919c-a792-4dad-8b5c-3ed4da32a694";
+const variantId = "8cfb02c4-2dfc-4eb7-a405-ea0af40bef57";
+const customId = "1c9002e0-bd09-413f-837a-a3bf1a2bb648";
+const offer = { ...emptyOffer, name: "Fixture only: bedtime routine worksheet", deliverable: "One printable page with spaces for a viewer’s own wind-down routine.",
+  audienceMoment: "The viewer wants to prepare for bedtime without another complicated routine.", action: "See the worksheet" };
+assert.equal(missingOfferFields(emptyOffer).length, 4);
+assert.equal(usableOffer({ ...offer, proofUrl: "https://example.com/proof" }), undefined);
+assert.equal(usableOffer({ ...offer, destination: "javascript:alert(1)" }), undefined);
+assert.deepEqual(usableOffer(offer), offer);
+const editorial = { ...originalProject, spec: { ...configured, id: primaryId, offer } };
+const inventory = savedContentInventory(editorial, [editorial, { ...editorial, variationOf: primaryId, spec: { ...editorial.spec, id: variantId } },
+  { ...editorial, kit: "custom", spec: { ...editorial.spec, id: customId } }]);
+assert.deepEqual(inventory.map(({ id, status, variations }) => [id, status, variations]), [[primaryId, "script", 1]]);
+assert(startStudioRunSchema.safeParse({ kind: "workflow", workflow: "offer", id: variantId, videoId: primaryId, revision: 10 }).success);
+assert(!startStudioRunSchema.safeParse({ kind: "workflow", workflow: "offer", id: variantId, videoId: primaryId, revision: 10, stage: 2 }).success);
+
+const campaign = { ...single, kind: "workflow", phase: "running", input: { brief, kit: editorial.kit, spec: editorial.spec, script: editorial.script,
+  campaign: { offer, inventory, scan: process.argv[2] ? fs.readFileSync(process.argv[2], "utf8") : undefined } }, state: { stage: 0, taskId: "editor", outputs: [] } };
+const intents = ["discover", "consider", "act"];
+const strategy = { series: "The small bedtime reset", objective: "See whether the routine questions generate worksheet interest.",
+  slots: intents.map((intent, index) => ({ intent, placement: `Week ${index + 1}`, topic: ["The thermostat truce", "Set up a nightstand", "Use the worksheet"][index],
+    audienceQuestion: ["Who moved my blanket?", "What can I set up now?", "What comes with the worksheet?"][index],
+    decision: index === 0 ? "refresh" : "create", projectIds: index === 0 ? [primaryId] : [], rationale: "Gives this audience a specific next step.",
+    payoff: ["A sticky-note counteroffer", "One visible nightstand setup", "The actual printable page"][index],
+    nextStep: index === 2 ? offer.action : "Watch the next piece", evidence: process.argv[2] ? ["video-1"] : [], assumption: "Confirm that the setup is easy to film." })) };
+assert.match(promptForStudioRun(campaign), /Role: editorial strategist/);
+if (process.argv[2]) assert.match(promptForStudioRun(campaign), /Perimenopause after dark/);
+assert.throws(() => checkedStudioOutput(campaign, JSON.stringify({ ...strategy, slots: strategy.slots.map((row) => ({ ...row, evidence: ["invented-url"] })) })), /supplied evidence/);
+const requestedPlan = checkedStudioOutput(campaign, JSON.stringify(strategy));
+assert.equal(requestedPlan.phase, "review");
+const approvedPlan = studioDecision({ ...campaign, ...requestedPlan }, "approve", "");
+assert.equal(approvedPlan.phase, "queued");
+assert.equal(approvedPlan.state.stage, 1);
+const draftRun = { ...campaign, ...approvedPlan };
+assert.match(promptForStudioRun(draftRun), /approved slot order/);
+const creatives = { creatives: intents.map((intent, index) => ({ intent, treatment: ["Deadpan skit", "Nightstand demo", "Worksheet walkthrough"][index],
+  firstFrame: ["A hand slides over a note", "An empty nightstand", "Close-up on the worksheet"][index], thumbnail: "BEDTIME RESET", thumbnailDirection: "Keep the note in the center with space above.",
+  proofUsed: false, assumptions: [], plan: { ...finishedPlan, title: ["A Truce at 2 a.m.", "The Nightstand Reset", "One Page Before Bed"][index], shots: finishedPlan.shots.map((shot, shotIndex) =>
+    intent === "act" && shotIndex === finishedPlan.shots.length - 1 ? { ...shot, narration: offer.action } : shot) } })) };
+assert.throws(() => checkedStudioOutput(draftRun, JSON.stringify({ creatives: creatives.creatives.map((entry) => ({ ...entry, proofUsed: true })) })), /proof that was not supplied/);
+const readyForReview = checkedStudioOutput(draftRun, JSON.stringify(creatives));
+assert.equal(readyForReview.phase, "queued");
+assert.equal(readyForReview.state.stage, 2);
+assert.equal(readyForReview.state.taskId, undefined);
+const reviewRun = { ...campaign, ...readyForReview };
+assert.match(promptForStudioRun(reviewRun), /independent creative reviewer/);
+const checks = intents.map((intent) => ({ intent, opening: 4, brandFit: 4, proof: 4, feasibility: 4, action: 4, note: "The first frame shows the promised object.", blockers: [] }));
+const blocked = checkedStudioOutput(reviewRun, JSON.stringify({ checks: [{ ...checks[0], opening: 2, blockers: ["Shot 1: Replace the empty setup with the note."] }, ...checks.slice(1)] }));
+assert.equal(blocked.phase, "blocked");
+assert.equal(studioDecision({ ...reviewRun, ...blocked }, "approve", ""), null);
+const retry = studioDecision({ ...reviewRun, ...blocked }, "retry", "Keep the humor dry.");
+assert.equal(retry.state.stage, 1);
+assert.match(retry.state.notes, /Shot 1.*note/);
+const ready = checkedStudioOutput(reviewRun, JSON.stringify({ checks }));
+assert.equal(studioDecision({ ...reviewRun, ...ready }, "approve", "").phase, "complete");
+console.log("PASS same-brand inventory, offer preflight, approved editorial plan, three validated creatives, independent review, retry and final gate");

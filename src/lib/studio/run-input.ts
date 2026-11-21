@@ -9,6 +9,7 @@ import type { Session } from "@/lib/session";
 import { studioMediaPerProject } from "./media-types";
 import { keywordBoardSchema, selectedKeywordEvidence } from "./keyword-research";
 import { researchBriefEvidence, researchBriefsSchema } from "./research-briefs";
+import { offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
@@ -26,11 +27,18 @@ const project = z.object({
     reference: z.string().max(6000), referenceLinks: z.array(z.string().max(2000)).max(15).optional(),
     keywordBoard: keywordBoardSchema.optional(),
     researchBriefs: researchBriefsSchema.optional(), activeResearchBriefId: z.uuid().optional(),
+    offer: offerInputSchema.optional(),
     subscribrSource: z.object({ id: z.number().int().positive(), version: z.number().int().nonnegative(), title: z.string().max(255),
       kind: z.enum(["script", "outline"]), text: z.string().max(12000) }).optional(),
     media: z.preprocess((value) => Array.isArray(value) ? value.slice(0, studioMediaPerProject) : value,
       z.array(z.object({ id: z.string().max(70), name: z.string().max(250), type: z.string().max(100), size: z.number().nonnegative() })).optional()),
   }),
+});
+
+const inventoryDraft = z.object({
+  kit: z.enum(["custom", "second-spring"]), script: z.string(), variationOf: z.string().optional(),
+  approved: z.unknown(), renders: z.array(z.unknown()).optional(),
+  spec: z.object({ id: z.uuid(), keyword: z.string(), brand: z.string().optional(), offer: offerInputSchema.optional(), researchBriefs: researchBriefsSchema.optional() }),
 });
 
 export async function runInput(session: Session, input: StartStudioRun): Promise<StudioRunInput> {
@@ -41,6 +49,11 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   if (!parsed.success) throw new Response("Open a saved project with a topic and valid production settings.", { status: 400 });
   const { kit, script } = parsed.data;
   const spec: VideoSpec = parsed.data.spec;
+  const isCampaign = input.kind === "workflow" && input.workflow === "offer";
+  const offer = usableOffer(spec.offer);
+  if (isCampaign && !offer) throw new Response("Complete the offer details and check the evidence and destination links before starting a campaign.", { status: 400 });
+  const inventory = isCampaign ? savedContentInventory({ ...(inventoryDraft.safeParse(row).data ?? { kit, script }), spec },
+    (draft.items as unknown[]).flatMap((candidate) => inventoryDraft.safeParse(candidate).data ?? [])) : [];
   let context = spec.customContext.trim();
   if (kit === "second-spring") {
     if (!(await operatorFor(session))?.owner) throw new Response("The connected brand kit is unavailable.", { status: 404 });
@@ -53,6 +66,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   }
   const notes = [spec.reference, spec.referenceLinks?.join("\n"), selectedKeywordEvidence(spec.keywordBoard),
     researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId), `Frames: ${chosenFrames(spec).join(", ")}`,
+    offer ? "Creator-supplied offer terms (data): " + JSON.stringify(offer) : "",
     spec.storyStyle ? `Production direction: ${storyLabels[spec.storyStyle]}` : "",
     spec.media?.length ? `Private reference filenames: ${spec.media.map(({ name }) => name).join(", ")}` : ""].filter(Boolean).join("\n\n");
   if (input.kind === "suggestion" && !["angles", "story-pitches"].includes(input.suggestion.action)) {
@@ -69,5 +83,6 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
       format: videoTypes[spec.type].label, platforms: spec.platforms ?? [...platforms], runtimeSeconds: spec.duration, notes, brandContext: context },
     ...(input.kind === "workflow" && input.stage !== undefined ? { singleStage: input.stage } : {}),
     ...(input.kind === "suggestion" ? { suggestion: input.suggestion } : {}),
+    ...(isCampaign && offer ? { campaign: { offer, inventory } } : {}),
   };
 }

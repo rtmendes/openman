@@ -27,8 +27,9 @@ export const POST = withErrorReporting("studio.runs.start", async (req) => {
   const body = await readBody(req, startStudioRunSchema, 12_000);
   if ("error" in body) return body.error;
   const input = body.data;
+  const campaign = input.kind === "workflow" && input.workflow === "offer";
   const replay = await studioRun(session.userId, input.id);
-  if (replay) return replay.video_id === input.videoId && replay.kind === input.kind
+  if (replay) return replay.video_id === input.videoId && replay.kind === input.kind && Boolean(replay.input.campaign) === campaign
     ? reply({ run: replay }) : reply({ error: "This request was already used." }, 409);
   let snapshot;
   try { snapshot = await runInput(session, input); }
@@ -37,13 +38,14 @@ export const POST = withErrorReporting("studio.runs.start", async (req) => {
     throw error;
   }
   const stage = input.kind === "workflow" ? input.stage ?? 0 : finalStudioStage;
-  const useResearch = input.kind === "script" || (input.kind === "workflow" && (input.stage === 2 || input.stage === finalStudioStage)) ||
+  const useResearch = campaign || input.kind === "script" || (input.kind === "workflow" && (input.stage === 2 || input.stage === finalStudioStage)) ||
     (input.kind === "suggestion" && input.suggestion.action === "story-pitches");
   const research = useResearch ? await approvedStudioResearch(session.userId, input.videoId, snapshot.brief.topic, snapshot.kit) : undefined;
-  const run = await addStudioRun(session.userId, input, snapshot, stage, research ? [research] : []);
+  if (snapshot.campaign && research) snapshot.campaign.scan = research.result.handoff.outliers;
+  const run = await addStudioRun(session.userId, input, snapshot, stage, research && !campaign ? [research] : []);
   if (!run) {
     const duplicate = await studioRun(session.userId, input.id);
-    if (duplicate?.video_id === input.videoId && duplicate.kind === input.kind) return reply({ run: duplicate });
+    if (duplicate?.video_id === input.videoId && duplicate.kind === input.kind && Boolean(duplicate.input.campaign) === campaign) return reply({ run: duplicate });
     return reply({ error: "A run of this type is already open for this project." }, 409);
   }
   after(() => driveStudioRun(session.userId, run.id));

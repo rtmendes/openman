@@ -10,19 +10,24 @@ import { PackagingPreview } from "./packaging-preview";
 import { YouTubeEvidenceTable } from "./youtube-evidence-table";
 import { readStudioPackaging } from "@/lib/studio/packaging";
 import { stages } from "./workflow";
+import { stageRules } from "./pipeline";
+import { missingOfferFields, usableOffer } from "@/lib/studio/campaign-input";
+import { offerStages } from "@/lib/studio/campaign-workflow";
+import { OfferCampaignResult } from "./offer-planning";
 
 const phaseLabels: Record<StudioRun["phase"], string> = {
   queued: "Queued", dispatching: "Starting", running: "Running", waiting: "Waiting for your input",
   review: "Needs approval", blocked: "Action needed", complete: "Complete", stopped: "Stopped",
 };
-type RunRequest = { kind: "script" } | { kind: "workflow"; stage?: number } | { kind: "suggestion"; suggestion: StudioSuggestion };
+type RunRequest = { kind: "script" } | { kind: "workflow"; stage?: number; workflow?: "offer" } | { kind: "suggestion"; suggestion: StudioSuggestion };
 
-export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy, onSavedResearch }: {
+export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy, onSavedResearch, onCampaign }: {
   spec: VideoSpec; kit: string; script: string; plan?: VideoPlan; shot: number; onShot: (index: number) => void; revision?: number;
   stage: number; onStage: (index: number) => void; activity: number; canStart: boolean; canCopy: boolean;
   onPlan: (run: StudioRun, copy: boolean) => void;
   onSuggestion: (run: StudioRun, option: StudioAlternative, copy: boolean) => void;
   onSavedResearch: (evidence: { videoId: string; csv?: string }) => void;
+  onCampaign: (run: StudioRun) => void;
 }) {
   const [runs, setRuns] = useState<StudioRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,8 +108,12 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   }
 
   const run = runs.find(({ id }) => id === resultId) ?? runs[0];
+  const campaign = Boolean(run?.input.campaign);
+  const progressStages = campaign ? offerStages : stages;
   const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && isStudioRunOpen(entry.phase));
   const baseDisabled = loading || pending || !revision || !canStart;
+  const missing = missingOfferFields(spec.offer);
+  const offerReady = Boolean(usableOffer(spec.offer));
   const selected = run?.input.suggestion;
   const research = run?.state.stage === 1 ? run.state.outputs.find(({ result }) => result.stage === 1)?.result : undefined;
   let packageOptions = run?.state.packaging;
@@ -158,8 +167,19 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
           onStage(1); void start({ kind: "workflow", stage: 1 });
         }}>Scan YouTube with agent</button>
       </div>
-      <details><summary>Stage instructions</summary><ol>{stages[stage].instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
+      <details><summary>Stage instructions</summary><p>{stageRules[stage].check}</p><ol>{stages[stage].instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
       <p className="production-hint">Runs use agent credits.</p>
+    </section>
+
+    <section className="studio-assistant-card" aria-labelledby="studio-offer-run-heading">
+      <h3 id="studio-offer-run-heading">Offer campaign</h3>
+      <p>Review the three-piece editorial plan first. The agent drafts and reviews the creatives after you approve it.</p>
+      {missing.length > 0 ? <p className="production-hint">Add {missing.join(", ").toLowerCase()} in Offer and editorial planning.</p>
+        : !offerReady ? <p className="production-hint">Check the links and add a proof statement if you supplied a proof link.</p>
+        : activeKind("workflow") && <p className="production-hint">Finish or stop the open workflow for this project before starting a campaign.</p>}
+      <div className="studio-assistant-actions"><button type="button" disabled={baseDisabled || !offerReady || activeKind("workflow")}
+        onClick={() => void start({ kind: "workflow", workflow: "offer" })}>Plan offer campaign</button></div>
+      <p className="production-hint">Each agent step uses credits. The campaign stays private.</p>
     </section>
 
     {(error || pollError) && <p role="alert">{error || "Could not refresh the run history. Retrying automatically."}</p>}
@@ -167,17 +187,20 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       <h3 id="studio-result-heading">Run results</h3>
       <label>History<select value={run.id} onChange={(event) => { setResultId(event.target.value); setChangeNotes(""); }}>
         {runs.map((entry) => <option key={entry.id} value={entry.id}>
-          {entry.input.suggestion ? suggestionActions[entry.input.suggestion.action] : entry.kind === "script" ? "Script" : entry.input.singleStage !== undefined ? stages[entry.input.singleStage].title : "Full workflow"} · {phaseLabels[entry.phase]} · {new Date(entry.created_at).toLocaleString()}
+          {entry.input.campaign ? "Offer campaign" : entry.input.suggestion ? suggestionActions[entry.input.suggestion.action] : entry.kind === "script" ? "Script" : entry.input.singleStage !== undefined ? stages[entry.input.singleStage].title : "Full workflow"} · {phaseLabels[entry.phase]} · {new Date(entry.created_at).toLocaleString()}
         </option>)}
       </select></label>
-      <p role="status"><strong>{phaseLabels[run.phase]}</strong> · {selected ? suggestionActions[selected.action] : stages[run.state.stage].title}</p>
+      <p role="status"><strong>{phaseLabels[run.phase]}</strong> · {selected ? suggestionActions[selected.action] : progressStages[run.state.stage].title}</p>
       {run.kind === "workflow" && run.input.singleStage === undefined && <ol className="studio-run-progress" aria-label="Workflow stages">
-        {stages.map(({ title }, index) => <li key={title} aria-current={index === run.state.stage ? "step" : undefined}>
+        {progressStages.map(({ title }, index) => <li key={title} aria-current={index === run.state.stage ? "step" : undefined}>
           {title} <small>{index < run.state.stage || (index === run.state.stage && run.phase === "complete") ? "Complete" : index === run.state.stage ? phaseLabels[run.phase] : "Upcoming"}</small>
         </li>)}
       </ol>}
       {run.state.message && <p role="alert">{run.state.message}</p>}
       {run.state.taskId && run.phase !== "dispatching" && <Link href={`/app/task/${encodeURIComponent(run.state.taskId)}`}>{run.phase === "waiting" ? "Open task to respond" : "View agent task"}</Link>}
+      {campaign && <OfferCampaignResult run={run} />}
+      {campaign && run.phase === "complete" && run.state.campaign?.creatives?.length === 3 &&
+        <div className="studio-assistant-actions"><button type="button" disabled={!canCopy} onClick={() => onCampaign(run)}>Open approved creatives as variations</button></div>}
       {run.state.outputs.filter(({ result }) => result.stage !== 2 || !packageOptions).map(({ result }) => <details key={result.stage} open={result.stage === run.state.stage && run.phase === "review"}>
         <summary>{stages[result.stage].title}</summary><p>{result.summary}</p>
         {result.stage === 1 && !research && result.handoff.outliers && <YouTubeEvidenceTable csv={result.handoff.outliers} />}
@@ -214,8 +237,10 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       </>}
       {(run.phase === "review" || run.phase === "blocked") && <label>Revision notes<textarea rows={2} value={changeNotes} maxLength={1200} onChange={(event) => setChangeNotes(event.target.value)} /></label>}
       <div className="studio-assistant-actions">
-        {run.phase === "review" && <button type="button" disabled={pending} onClick={() => void decide(run, "approve")}>{run.state.plan ? "Approve script" : "Approve stage"}</button>}
-        {(run.phase === "review" || run.phase === "blocked") && <button type="button" disabled={pending} onClick={() => void decide(run, "retry")}>Retry this step</button>}
+        {run.phase === "review" && <button type="button" disabled={pending} onClick={() => void decide(run, "approve")}>{campaign
+          ? run.state.stage === 0 ? "Approve plan and draft creatives" : "Approve creative batch" : run.state.plan ? "Approve script" : "Approve stage"}</button>}
+        {(run.phase === "review" || run.phase === "blocked") && <button type="button" disabled={pending} onClick={() => void decide(run, "retry")}>
+          {campaign && run.state.campaign?.review ? "Revise creatives" : "Retry this step"}</button>}
         {!["complete", "stopped"].includes(run.phase) && <button type="button" disabled={pending} onClick={() => void decide(run, "stop")}>Stop run</button>}
       </div>
     </section>}

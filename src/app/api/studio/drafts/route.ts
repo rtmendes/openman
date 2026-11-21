@@ -3,13 +3,14 @@ import { requireSession } from "@/lib/session";
 import { withErrorReporting } from "@/lib/observability/route";
 import { saveStudioDraft, studioDraft, studioVersions } from "@/lib/db/studio-drafts";
 import { researchBriefsSchema } from "@/lib/studio/research-briefs";
+import { offerInputSchema } from "@/lib/studio/campaign-input";
 
 const revision = z.number().int().min(0).max(2_147_483_646);
 const payload = z.object({
   expectedRevision: revision,
   items: z.array(z.object({
     spec: z.object({ id: z.uuid(), keyword: z.string().max(180), researchBriefs: researchBriefsSchema.optional(),
-      activeResearchBriefId: z.uuid().optional() }).passthrough(),
+      activeResearchBriefId: z.uuid().optional(), offer: offerInputSchema.optional() }).passthrough(),
     kit: z.enum(["custom", "second-spring"]),
     script: z.string().max(40000),
   }).passthrough()).max(12),

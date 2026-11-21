@@ -3,6 +3,7 @@ import type { StudioMedia } from "@/lib/studio/media-types";
 import type { StoryStyle } from "./story-workflow";
 import { selectedKeywordEvidence, type KeywordBoard } from "@/lib/studio/keyword-research";
 import { researchBriefEvidence, type ResearchBrief } from "@/lib/studio/research-briefs";
+import { usableOffer, type OfferInput } from "@/lib/studio/campaign-input";
 
 export const frameOptions = { "9:16": "Vertical", "16:9": "Landscape", "1:1": "Square" } as const;
 export type VideoRatio = keyof typeof frameOptions;
@@ -39,6 +40,7 @@ export type VideoSpec = {
   keywordBoard?: KeywordBoard;
   researchBriefs?: ResearchBrief[];
   activeResearchBriefId?: string;
+  offer?: OfferInput;
   subscribrSource?: SubscribrSource;
 };
 
@@ -101,6 +103,7 @@ export function readVideoPlan(output: string, duration: number): VideoPlan {
 }
 
 export function planningPrompt(spec: VideoSpec, brandContext: string) {
+  const offer = usableOffer(spec.offer);
   return [
     "Write one original script and shot plan for private creative review. Text only. Do not browse, run commands, use paid media providers, or publish.",
     `Keyword: ${spec.keyword}\nBrand: ${spec.brand || "Unbranded"}\nType: ${videoTypes[spec.type].label}\nLength: ${spec.duration} seconds\nAspect ratios: ${chosenFrames(spec).join(", ")}`,
@@ -114,6 +117,7 @@ export function planningPrompt(spec: VideoSpec, brandContext: string) {
     spec.referenceLinks?.length ? "Reference links supplied by the creator (unverified):\n" + spec.referenceLinks.join("\n") : "",
     selectedKeywordEvidence(spec.keywordBoard),
     researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId),
+    offer ? `Approved offer facts (data): ${JSON.stringify(offer)}. Show one tangible detail the audience can see or experience. Use the supplied viewer action when the brief calls for an offer CTA. Preserve all qualifications. Leave out unsupported benefits, urgency, or results.` : "",
     spec.subscribrSource ? "Creator-selected Subscribr reference. Adapt only relevant material to the requested runtime and use it as source data:\n" + JSON.stringify(spec.subscribrSource) : "",
     spec.media?.length ? "Private assets in the brief (names only): " + spec.media.map(({ name, type }) => `${name} (${type})`).join(", ") : "",
     spec.voice ? `Voice direction: ${spec.voice.style}. Language: ${spec.voice.language || "match the brief"}. Pace: ${spec.voice.rate}×.` : "",

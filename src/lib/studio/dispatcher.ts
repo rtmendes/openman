@@ -7,6 +7,7 @@ import { DbStore } from "@/lib/store/db-store";
 import { stages } from "@/app/content-studio/workflow";
 import { checkedStudioOutput, finalStudioStage, promptForStudioRun } from "./run-output";
 import { isStudioRunActive, suggestionActions, type StudioRun } from "./runs";
+import { offerStages } from "./campaign-workflow";
 
 const leaseMs = 120_000;
 const pollMs = 45_000;
@@ -36,13 +37,14 @@ async function step(userId: string, run: StudioRun) {
       try { prompt = promptForStudioRun(claimed); }
       catch { return block(userId, claimed, "The saved inputs could not be read. Start a new run from the corrected project."); }
       try {
+        const textOnly = claimed.kind === "suggestion" || Boolean(claimed.input.campaign) || claimed.state.stage === finalStudioStage || claimed.state.stage === 2;
         await createTask(store, {
           mode: "standard",
-          interaction: claimed.kind === "suggestion" || claimed.state.stage === finalStudioStage || claimed.state.stage === 2 ? "chat" : "agent",
+          interaction: textOnly ? "chat" : "agent",
           prompt,
-          references: claimed.kind === "suggestion" || claimed.state.stage === 2 || claimed.state.stage === finalStudioStage
-            ? [] : claimed.state.outputs.map(({ taskId: id }) => id),
-        }, { id: taskId, title: claimed.input.suggestion ? suggestionActions[claimed.input.suggestion.action] : stages[claimed.state.stage].title });
+          references: textOnly ? [] : claimed.state.outputs.map(({ taskId: id }) => id),
+        }, { id: taskId, title: claimed.input.suggestion ? suggestionActions[claimed.input.suggestion.action]
+          : (claimed.input.campaign ? offerStages : stages)[claimed.state.stage].title });
       } catch (error) {
         // Keep the reserved task ID when the write might have completed before the response failed.
         if (!(await store.getTask(taskId))) {

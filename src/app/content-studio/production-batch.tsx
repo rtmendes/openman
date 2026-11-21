@@ -13,6 +13,8 @@ import { ProjectAgent } from "./project-agent";
 import { StoryWorkflowPanel } from "./story-workflow-panel";
 import { TopicResearch } from "./topic-research";
 import { SubscribrPanel } from "./subscribr-panel";
+import { OfferPlanning } from "./offer-planning";
+import { savedContentInventory } from "@/lib/studio/campaign-input";
 import type { KeywordBoard } from "@/lib/studio/keyword-research";
 import { storyLabels, storyStyles } from "./story-workflow";
 import type { StoryEdit } from "./story-timeline";
@@ -33,6 +35,7 @@ type Item = {
   variationLabel?: string;
   renders?: StudioMedia[];
   storyEdit?: StoryEdit;
+  campaignCreative?: { runId: string; intent: string };
 };
 
 const storageKey = "mahara:video-production:v1";
@@ -132,6 +135,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       const changes = typeof change === "function" ? change(item.spec) : change;
       const spec = { ...item.spec, ...changes };
       if (spec.keyword.trim() !== item.spec.keyword.trim() || spec.brand !== item.spec.brand) spec.activeResearchBriefId = undefined;
+      if (spec.brand.trim().toLowerCase() !== item.spec.brand.trim().toLowerCase()) spec.offer = undefined;
       if (spec.storyStyle && Object.keys(changes).length === 1 && "media" in changes) {
         const approved = item.approved ? { ...item.approved, spec } : undefined;
         const storyEdit = item.storyEdit ? { ...item.storyEdit, storyboardApproved: undefined } : undefined;
@@ -220,8 +224,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   }
 
   function copyDraft(item: Item, keepRender: boolean): Item {
-    const { spec, kit, script, stale, variationLabel, storyEdit } = item;
-    return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel,
+    const { spec, kit, script, stale, variationLabel, storyEdit, campaignCreative } = item;
+    return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel, campaignCreative,
       ...(keepRender ? { renders: item.renders, storyEdit } : {}) };
   }
 
@@ -255,6 +259,24 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     if (!matchesStudioSource(run, item, drafts.savedRevision)) return;
     patch(item.spec.id, (row) => ({ ...row, script, stale: false, error: undefined,
       approved: { spec: row.spec, plan: run.state.plan!, brandContext: run.input.brief.brandContext ?? "" } }));
+  }
+
+  function openCampaign(run: StudioRun) {
+    const campaign = run.state.campaign;
+    const strategy = campaign?.strategy;
+    if (run.phase !== "complete" || !campaign?.creatives?.length || !strategy || !run.input.campaign) return;
+    const { spec, kit } = run.input;
+    const copies: Item[] = campaign.creatives.flatMap((creative) => {
+      if (items.some(({ campaignCreative }) => campaignCreative?.runId === run.id && campaignCreative.intent === creative.intent)) return [];
+      const slot = strategy.slots.find(({ intent }) => intent === creative.intent);
+      if (!slot) return [];
+      const notes = [`Editorial slot: ${slot.placement} · ${slot.intent}`, `Audience question: ${slot.audienceQuestion}`, `First frame: ${creative.firstFrame}`,
+        `Thumbnail: ${creative.thumbnail} · ${creative.thumbnailDirection}`, ...creative.assumptions, spec.reference].filter(Boolean).join("\n\n");
+      return [{ spec: { ...spec, keyword: slot.topic, reference: notes.slice(0, 6000), activeResearchBriefId: undefined }, kit,
+        script: JSON.stringify(creative.plan, null, 2), variationLabel: creative.plan.title, campaignCreative: { runId: run.id, intent: creative.intent } }];
+    });
+    if (!copies.length) { setNotice("These approved creatives are already in your projects."); return; }
+    if (addCopies(copies, false)) setNotice(`${copies.length} approved campaign creatives opened as editable video variations.`);
   }
 
   function applySuggestion(item: Item, run: StudioRun, option: StudioAlternative, copy: boolean) {
@@ -294,9 +316,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
 
   function chooseKit(id: string, kit: Item["kit"], custom?: VideoSpec) {
     clearPreview(id);
+    const brand = kit === "second-spring" ? connected?.name ?? "Second Spring" : custom?.brand ?? "";
     patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
-      spec: { ...row.spec, brand: kit === "second-spring" ? connected?.name ?? "Second Spring" : custom?.brand ?? "",
-        customContext: kit === "custom" ? custom?.customContext ?? "" : "", activeResearchBriefId: undefined } }));
+      spec: { ...row.spec, brand, customContext: kit === "custom" ? custom?.customContext ?? "" : "", activeResearchBriefId: undefined,
+        offer: row.kit === kit && row.spec.brand === brand ? row.spec.offer : undefined } }));
   }
 
   const approved = items.flatMap((item) => !item.approved || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
@@ -392,6 +415,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
             signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
             onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
+          <OfferPlanning value={spec.offer} inventory={savedContentInventory(item, items)} canDispatch={Boolean(draftKey)}
+            onChange={(offer) => patch(id, (row) => ({ ...row, spec: { ...row.spec, offer } }))} />
           <label>Brand kit<select value={item.kit} onChange={(e) => {
             const value = e.target.value;
             const reuse = items.find(({ spec: other }) => other.id === value);
@@ -523,7 +548,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       </article>
       {draftKey && <ProjectAgent spec={spec} kit={item.kit} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
         revision={drafts.savedRevision} stage={stage} onStage={onStage} activity={activity} canStart={Boolean(spec.keyword.trim()) && !locked && (item.kit !== "second-spring" || brandStatus === "ready")}
-        canCopy={items.length < limit} onSavedResearch={setSavedResearch} onPlan={(run, copy) => loadRunPlan(item, run, copy)} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
+        canCopy={items.length < limit} onSavedResearch={setSavedResearch} onPlan={(run, copy) => loadRunPlan(item, run, copy)}
+        onCampaign={openCampaign} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
       </div>;
     })}
     </div>

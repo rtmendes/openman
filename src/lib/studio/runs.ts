@@ -4,6 +4,7 @@ import type { StageOutput } from "@/app/content-studio/pipeline";
 import type { Brief } from "@/app/content-studio/workflow";
 import type { VideoPlan, VideoSpec } from "@/app/content-studio/production";
 import type { StudioPackaging } from "./packaging";
+import type { CampaignInput, CampaignState } from "./campaign-workflow";
 
 export const suggestionActions = {
   angles: "Suggest three distinct creative angles",
@@ -23,7 +24,8 @@ const suggestion = z.object({
 
 const request = z.object({ id: z.uuid(), videoId: z.uuid(), revision: z.number().int().positive() });
 export const startStudioRunSchema = z.discriminatedUnion("kind", [
-  request.extend({ kind: z.literal("workflow"), stage: z.number().int().min(0).max(6).optional() }),
+  request.extend({ kind: z.literal("workflow"), stage: z.number().int().min(0).max(6).optional(), workflow: z.literal("offer").optional() })
+    .refine((input) => !input.workflow || input.stage === undefined, "An offer campaign starts with the editorial plan."),
   request.extend({ kind: z.literal("script") }),
   request.extend({ kind: z.literal("suggestion"), suggestion }),
 ]);
@@ -80,6 +82,7 @@ export type StudioRunInput = {
   script: string;
   singleStage?: number;
   suggestion?: StudioSuggestion;
+  campaign?: CampaignInput;
 };
 
 export type StudioRunPhase = "queued" | "dispatching" | "running" | "waiting" | "review" | "blocked" | "complete" | "stopped";
@@ -91,6 +94,7 @@ export type StudioRunState = {
   plan?: VideoPlan;
   alternatives?: StudioAlternative[];
   packaging?: StudioPackaging;
+  campaign?: CampaignState;
   message?: string;
   notes?: string;
 };

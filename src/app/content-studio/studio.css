@@ -87,6 +87,10 @@
 .studio-research-evidence li { padding: 5px 0; overflow-wrap: anywhere; }
 .studio-research-evidence li + li { border-top: 1px solid var(--line); }
 .studio-research-evidence small { display: block; color: var(--muted); }
+.studio-offer-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; }
+.studio-offer-handoff { display: grid; gap: 3px; margin: 8px 0; }
+.studio-offer-handoff dt { font-weight: 650; }
+.studio-offer-handoff dd { margin: 0 0 5px; overflow-wrap: anywhere; }
 .studio-keyword-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .studio-keyword-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
 .studio-keyword-scroll :is(th, td) { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
