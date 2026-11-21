@@ -113,7 +113,9 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const frame = chosenFrames(spec).includes(ratio) ? ratio : chosenFrames(spec)[0];
   const image = spec.media?.find(({ type }) => type.startsWith("image/"));
 
-  return <aside className="studio-project-agent" aria-label="Project assistant">
+  return <>
+    {packageOptions && <PackagingPreview result={packageOptions} spec={run.input.spec} kit={run.input.kit} />}
+    <aside className="studio-project-agent" aria-label="Project assistant">
     <section id="studio-suggestions" className="studio-assistant-card" aria-labelledby="studio-assistant-heading">
       <h3 id="studio-assistant-heading"><Sparkles size={16} aria-hidden /> AI suggestions</h3>
       <label>Shot<select value={target} disabled={!plan} onChange={(event) => onShot(Number(event.target.value))}>
@@ -157,11 +159,10 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       </ol>}
       {run.state.message && <p role="alert">{run.state.message}</p>}
       {run.state.taskId && run.phase !== "dispatching" && <Link href={`/app/task/${encodeURIComponent(run.state.taskId)}`}>{run.phase === "waiting" ? "Open task to respond" : "View agent task"}</Link>}
-      {run.state.outputs.map(({ result }) => <details key={result.stage} open={result.stage === run.state.stage && run.phase === "review"}>
+      {run.state.outputs.filter(({ result }) => result.stage !== 2 || !packageOptions).map(({ result }) => <details key={result.stage} open={result.stage === run.state.stage && run.phase === "review"}>
         <summary>{stages[result.stage].title}</summary><p>{result.summary}</p>
         {Object.entries(result.handoff).map(([field, value]) => <details className="studio-handoff" key={field}><summary>{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</summary><pre>{value}</pre></details>)}
       </details>)}
-      {packageOptions && <PackagingPreview result={packageOptions} spec={run.input.spec} kit={run.input.kit} />}
       {run.state.plan && <div className="studio-result-option">
         <strong>{run.state.plan.title}</strong><p>{run.state.plan.shots.length} shots · {run.input.spec.duration}s</p>
         <details><summary>Read proposed script</summary><ol>{run.state.plan.shots.map((entry, index) => <li key={index}>{entry.narration || entry.visual}</li>)}</ol></details>
@@ -197,5 +198,6 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
         {!["complete", "stopped"].includes(run.phase) && <button type="button" disabled={pending} onClick={() => void decide(run, "stop")}>Stop run</button>}
       </div>
     </section>}
-  </aside>;
+    </aside>
+  </>;
 }
