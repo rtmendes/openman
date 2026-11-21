@@ -168,3 +168,36 @@ const pitches = { alternatives: Array.from({ length: 10 }, (_, index) => ({
 assert.equal(checkedStudioOutput(pitchRun, JSON.stringify(pitches)).state.alternatives.length, 10);
 assert.throws(() => checkedStudioOutput(pitchRun, JSON.stringify({ alternatives: pitches.alternatives.slice(1) })), /ten distinct/);
 console.log("PASS story pitch count and evidence, SRT import, and shot timing");
+
+const { importKeywordCsv, rankKeywords, keywordId, selectedKeywordEvidence, suggestedSearches } = require("../src/lib/studio/keyword-research.ts");
+const keyDate = "2026-11-20";
+const lowFruits = importKeywordCsv('Keyword,Volume,SD,# Weak Websites\r\n"perimenopause, at night","1,300",1,4\r\n', "LowFruits", "US", keyDate);
+assert.equal(lowFruits.rows[0].volume, 1300);
+assert.equal(lowFruits.rows[0].weakSites, 4);
+assert.equal(lowFruits.rows[0].difficulty, 1);
+const semrush = importKeywordCsv("Keyword;Volume;Keyword Difficulty %;Intent\nperimenopause questions;820;26%;I\nremote help;0;;N", "Semrush", "GB", keyDate);
+assert.equal(semrush.rows[0].intent, "informational");
+assert.equal(semrush.rows[1].volume, 0);
+assert.equal(semrush.rows[1].difficulty, undefined);
+const ahrefs = importKeywordCsv("Keyword\tVolume\tKD\nperimenopause questions\t900\t12", "Ahrefs", "GB", keyDate);
+assert.equal(ahrefs.rows[0].difficulty, 12);
+assert.notEqual(keywordId(semrush.rows[0]), keywordId(ahrefs.rows[0]));
+assert.match(rankKeywords(semrush.rows, "perimenopause", "", "answer")[0].reason, /Matches perimenopause/);
+const board = { seed: "perimenopause", objective: "answer", rows: [...lowFruits.rows, ...semrush.rows], shortlist: [keywordId(semrush.rows[0])] };
+assert.match(selectedKeywordEvidence(board), /perimenopause questions/);
+assert.doesNotMatch(selectedKeywordEvidence(board), /remote help/);
+assert.match(suggestedSearches("perimenopause", "relate", "English")[1], /real experiences/);
+assert.deepEqual(suggestedSearches("transición", "answer", "Spanish"), ["transición"]);
+const { readDataForSeoKeywords, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } = require("../src/lib/studio/provider-results.ts");
+const keywordReport = readDataForSeoKeywords({ status_code: 20000, cost: .01212,
+  tasks: [{ status_code: 20000, result: [{ items: [{ keyword: "perimenopause questions", keyword_info: { search_volume: 400 },
+    keyword_properties: { keyword_difficulty: null }, search_intent_info: { main_intent: "informational" } }] }] }] }, "US", "en", keyDate);
+assert.equal(keywordReport.rows[0].difficulty, undefined);
+assert.equal(keywordReport.cost, .01212);
+assert.throws(() => readDataForSeoKeywords({ status_code: 20000, tasks: [{ status_code: 40100 }] }, "US", "en", keyDate));
+assert.equal(readSubscribrChannels({ success: true, data: [{ id: 3, details: { title: "Studio channel" } }] }).entries[0].title, "Studio channel");
+assert.equal(readSubscribrScripts({ success: true, data: [{ id: 3, title: "Script draft", has_script: false }] }).entries[0].hasScript, false);
+const scriptAsset = { success: true, data: { script_id: 3, script: "Opening!", outline: "", content_version: 1 } };
+assert.equal(readSubscribrNarration(scriptAsset, 3).script, "Opening!");
+assert.throws(() => readSubscribrNarration(scriptAsset, 4));
+console.log("PASS provider-specific CSV, relevance and shortlist handoff, DataForSEO response, and Subscribr imports");

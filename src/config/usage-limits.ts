@@ -31,6 +31,8 @@ export const USAGE_LIMITS = {
   sound_effects: { day: 20, month: 100, label: "sound effects" },
   /** People invited to a published website (Orgo emails them). */
   site_invites: { day: 50, month: 300, label: "website invitations" },
+  /** Explicit owner-requested DataForSEO Google keyword ideas lookups. */
+  studio_keyword_lookups: { day: 10, month: 60, label: "keyword lookups" },
 } as const;
 
 export type UsageMetric = keyof typeof USAGE_LIMITS;

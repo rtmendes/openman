@@ -7,6 +7,7 @@ import { decideStudioRun, listStudioRuns, startStudioRun, studioMediaUrl } from 
 import { isStudioRunActive, isStudioRunOpen, matchesStudioSource, suggestionActions, type StartStudioRun, type StudioAlternative, type StudioRun, type StudioSuggestion } from "@/lib/studio/runs";
 import { chosenFrames, parseVideoPlan, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { PackagingPreview } from "./packaging-preview";
+import { YouTubeEvidenceTable } from "./youtube-evidence-table";
 import { readStudioPackaging } from "@/lib/studio/packaging";
 import { stages } from "./workflow";
 
@@ -123,7 +124,8 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       </select></label>
       <label>Direction <span className="production-hint">(optional)</span><textarea maxLength={500} rows={2} value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="Keep the punchline dry. Shorten the setup." /></label>
       <div className="studio-assistant-actions">
-        {spec.storyStyle && <button type="button" disabled={baseDisabled || activeKind("suggestion")} onClick={() => suggest("story-pitches")}>Draft 10 story pitches</button>}
+        {(spec.storyStyle || Boolean(spec.keywordBoard?.shortlist.length)) && <button type="button" disabled={baseDisabled || activeKind("suggestion")}
+          onClick={() => suggest("story-pitches")}>{spec.keywordBoard?.shortlist.length ? "Pitch 10 ideas from shortlist" : "Draft 10 story pitches"}</button>}
         {([ ["angles", "Suggest angles"], ["hook", "Write hooks"], ["narration", "Rewrite narration"], ["caption", "Write captions"], ["visual", "Suggest layouts"], ["review", "Review draft"] ] as const).map(([action, label]) => (
           <button type="button" key={action} disabled={baseDisabled || activeKind("suggestion") || (action !== "angles" && !plan)} onClick={() => suggest(action)}>{label}</button>
         ))}
@@ -165,6 +167,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       {run.state.taskId && run.phase !== "dispatching" && <Link href={`/app/task/${encodeURIComponent(run.state.taskId)}`}>{run.phase === "waiting" ? "Open task to respond" : "View agent task"}</Link>}
       {run.state.outputs.filter(({ result }) => result.stage !== 2 || !packageOptions).map(({ result }) => <details key={result.stage} open={result.stage === run.state.stage && run.phase === "review"}>
         <summary>{stages[result.stage].title}</summary><p>{result.summary}</p>
+        {result.stage === 1 && result.handoff.outliers && <YouTubeEvidenceTable csv={result.handoff.outliers} />}
         {Object.entries(result.handoff).map(([field, value]) => <details className="studio-handoff" key={field}><summary>{field.replace(/([a-z])([A-Z])/g, "$1 $2")}</summary><pre>{value}</pre></details>)}
       </details>)}
       {run.state.plan && <div className="studio-result-option">

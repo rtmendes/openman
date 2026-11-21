@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Clapperboard, CopyPlus, Download, Plus, X } from "lucide-react";
-import { createTask, getSecondSpringContext, getTask, startStudioRun, studioMediaUrl, uploadStudioMedia } from "@/lib/agent/client";
+import { createTask, getSecondSpringContext, getTask, startStudioRun, studioMediaUrl, studioProviderStatus, uploadStudioMedia, type StudioProviderStatus } from "@/lib/agent/client";
 import type { StudioMedia } from "@/lib/studio/media-types";
 import { matchesStudioSource, type StudioAlternative, type StudioRun } from "@/lib/studio/runs";
 import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
@@ -12,6 +12,8 @@ import { NarrationOptions, ReferenceInputs } from "./production-inputs";
 import { ProjectAgent } from "./project-agent";
 import { StoryWorkflowPanel } from "./story-workflow-panel";
 import { TopicResearch } from "./topic-research";
+import { SubscribrPanel } from "./subscribr-panel";
+import type { KeywordBoard } from "@/lib/studio/keyword-research";
 import { storyLabels, storyStyles } from "./story-workflow";
 import type { StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
@@ -41,6 +43,7 @@ function blank(): Item {
 }
 
 const sampleShape = '{"title":"My video","caption":"Social caption","shots":[{"end":5,"narration":"Opening line","visual":"Describe the shot","overlay":"Opening text","sound":"Sound cue","asset":"Footage to record"}]}';
+const blankKeywordBoard: KeywordBoard = { seed: "", objective: "answer", rows: [], shortlist: [] };
 
 export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, stage, onStage }: {
   canLoadBrand: boolean; signedIn: boolean; draftKey?: string; onExample?: () => void; stage: number; onStage: (stage: number) => void;
@@ -53,6 +56,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [connected, setConnected] = useState<{ name: string; context: string } | null>(null);
   const [brandStatus, setBrandStatus] = useState<"checking" | "ready" | "unavailable">("checking");
+  const [providers, setProviders] = useState<StudioProviderStatus>();
   const [version, setVersion] = useState("");
   const [versionPending, setVersionPending] = useState(false);
   const [projectId, setProjectId] = useState("");
@@ -72,6 +76,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   useEffect(() => {
     if (!canLoadBrand) return;
     let active = true;
+    void studioProviderStatus().then((status) => { if (active) setProviders(status); }).catch(() => {});
     void getSecondSpringContext().then((source) => {
       if (!active || !source.registry?.name || !source.kits.length) {
         if (active) setBrandStatus("unavailable");
@@ -377,7 +382,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
-          <TopicResearch keyword={spec.keyword} signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
+          <TopicResearch keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
+            board={spec.keywordBoard ?? blankKeywordBoard} dataForSeo={Boolean(providers?.dataForSeo)}
+            onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
+            signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
             onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
           <label>Brand kit<select value={item.kit} onChange={(e) => {
             const value = e.target.value;
@@ -426,6 +434,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
           <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
+        {canLoadBrand && <SubscribrPanel connected={Boolean(providers?.subscribr)} current={spec.subscribrSource}
+          onImport={(subscribrSource) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrSource } }))} />}
         {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
           onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
           onRender={(file) => previewFile(item, file)} cloud={Boolean(draftKey)} />}

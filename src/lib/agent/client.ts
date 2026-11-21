@@ -48,6 +48,26 @@ export const decideStudioRun = (input: ChangeStudioRun) => studioRunRequest<{ ru
 export type StudioResearchSource = { title: string; description?: string; url: string };
 export const searchStudioTopic = (topic: string) =>
   studioRunRequest<{ sources: StudioResearchSource[] }>(`/api/studio/research?q=${encodeURIComponent(topic)}`);
+export type StudioProviderStatus = { dataForSeo: boolean; subscribr: boolean };
+type SubscribrEntry = { id: number; title: string; hasScript?: boolean };
+type SubscribrPage = { entries: SubscribrEntry[]; page: number; lastPage: number };
+export type SubscribrNarration = { id: number; script: string; outline: string; version: number };
+export const studioProviderStatus = () => studioRunRequest<StudioProviderStatus>("/api/studio/providers?action=status");
+export const listSubscribrChannels = (page = 1) =>
+  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=channels&page=${page}`);
+export const listSubscribrScripts = (channel: number, page: number, search: string) =>
+  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=scripts&channel=${channel}&page=${page}&search=${encodeURIComponent(search)}`);
+export const getSubscribrNarration = (script: number) =>
+  studioRunRequest<SubscribrNarration>(`/api/studio/providers?action=narration&script=${script}`);
+export async function lookupStudioKeywords(seed: string, market: string, language: string) {
+  const response = await fetch("/api/studio/providers", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seed, market, language, confirmCharge: true }),
+  });
+  const data = await response.json() as { error?: string; rows?: import("@/lib/studio/keyword-research").KeywordEvidence[]; cost?: number };
+  if (!response.ok || !data.rows) throw new Error(data.error || "Could not look up keyword metrics.");
+  return { rows: data.rows, cost: data.cost };
+}
 
 export const studioMediaUrl = (id: string, download = false) => `/api/studio/media?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;
 export async function uploadStudioMedia(file: File): Promise<StudioMedia> {

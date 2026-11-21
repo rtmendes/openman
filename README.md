@@ -153,6 +153,8 @@ vendors are paid by whoever operates the deployment, so per-user daily and month
 | A phone number for the agent (SMS and calls) | [AgentPhone](https://agentphone.ai) | `AGENTPHONE_API_KEY`, `AGENTPHONE_WEBHOOK_SECRET`, `AGENTPHONE_SUB_ACCOUNT_ID` |
 | Voice input, meeting transcription, speech and sound effects | [ElevenLabs](https://elevenlabs.io) | `ELEVENLABS_API_KEY`; `ELEVENLABS_MUSIC=1` for music (paid plan) |
 | Image and video generation | fal, OpenAI, xAI or Krea | Set by each user on their own computer in `~/.hermes/.env`: `FAL_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY` or `KREA_API_KEY` (video: `XAI_API_KEY` or `FAL_KEY`) |
+| Content Studio Google keyword research | [DataForSEO](https://docs.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live/) | `DATAFORSEO_BASIC_AUTH`; owner-initiated paid lookups, limited by `USAGE_LIMITS.studio_keyword_lookups` |
+| Content Studio script and outline import | [Subscribr](https://subscribr.ai/youtube-api/reference) | `SUBSCRIBR_API_TOKEN` with `channels:read` and `scripts:read`; server-only, owner access |
 
 Without ElevenLabs, meeting notes can still be transcribed on the user's own computer with Whisper (no key needed).
 

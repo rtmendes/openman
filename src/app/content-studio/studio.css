@@ -69,6 +69,24 @@
 .studio-research-results li { display: grid; justify-items: start; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
 .studio-research-results small { color: var(--muted); }
 .studio-research-results button { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--tint); }
+.studio-keyword-board { display: grid; gap: 10px; }
+.studio-keyword-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); align-items: end; gap: 8px; }
+.studio-keyword-inputs label.studio-keyword-check { display: flex; align-items: center; min-height: 36px; }
+.studio-keyword-inputs label.studio-keyword-check input { width: auto; }
+.studio-keyword-import { border: 1px solid var(--line); border-radius: 8px; padding: 9px; }
+.studio-keyword-import summary { cursor: pointer; }
+.studio-keyword-import[open] > summary { margin-bottom: 9px; }
+.studio-keyword-pick { background: var(--tint); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.studio-keyword-pick p { margin: 3px 0 0; }
+.studio-keyword-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.studio-keyword-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.studio-keyword-scroll :is(th, td) { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.studio-keyword-scroll thead { background: var(--tint); color: var(--ink); }
+.studio-keyword-scroll tbody th { min-width: 130px; }
+.studio-keyword-scroll td small, .studio-keyword-scroll th small { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; }
+.studio-keyword-scroll button { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.studio-keyword-scroll button[aria-pressed="true"] { border-color: var(--accent); background: var(--tint); }
+.studio-subscribr-text { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .studio-story-editor { display: grid; gap: 9px; padding-top: 12px; border-top: 1px solid var(--line); }
 .studio-story-editor :is(h4, p) { margin: 0; }
 .studio-story-editor audio { width: 100%; }
