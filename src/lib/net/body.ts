@@ -12,7 +12,7 @@ export class BodyTooLarge extends Error {
   }
 }
 
-export async function readLimited(req: Request, max: number): Promise<Buffer> {
+export async function readLimited(req: Pick<Request, "headers" | "body">, max: number): Promise<Buffer> {
   const declared = Number(req.headers.get("content-length") ?? "");
   if (Number.isFinite(declared) && declared > max) throw new BodyTooLarge(max);
   if (!req.body) return Buffer.alloc(0);
@@ -33,7 +33,7 @@ export async function readLimited(req: Request, max: number): Promise<Buffer> {
 }
 
 /** JSON body with a byte limit. Throws `BodyTooLarge` or `SyntaxError`. */
-export async function readJsonLimited<T = unknown>(req: Request, max: number): Promise<T> {
+export async function readJsonLimited<T = unknown>(req: Pick<Request, "headers" | "body">, max: number): Promise<T> {
   const buf = await readLimited(req, max);
   return JSON.parse(buf.toString("utf8")) as T;
 }
