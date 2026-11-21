@@ -78,6 +78,15 @@
 .studio-keyword-import[open] > summary { margin-bottom: 9px; }
 .studio-keyword-pick { background: var(--tint); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .studio-keyword-pick p { margin: 3px 0 0; }
+.studio-research-briefs, .studio-research-groups, .studio-research-editor { display: grid; gap: 8px; }
+.studio-research-briefs { margin: 14px 0; padding: 12px 0; border-block: 1px solid var(--line); }
+.studio-research-briefs :is(h4, h5, p) { margin: 0; }
+.studio-research-groups h5 { color: var(--ink); font-size: 13px; }
+.studio-research-briefs summary small { margin-left: 6px; color: var(--muted); }
+.studio-research-evidence { list-style: none; padding: 0; margin: 5px 0; }
+.studio-research-evidence li { padding: 5px 0; overflow-wrap: anywhere; }
+.studio-research-evidence li + li { border-top: 1px solid var(--line); }
+.studio-research-evidence small { display: block; color: var(--muted); }
 .studio-keyword-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .studio-keyword-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
 .studio-keyword-scroll :is(th, td) { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }

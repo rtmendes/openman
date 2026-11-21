@@ -12,6 +12,14 @@ export const keywordObjectives: Record<KeywordObjective, string> = {
 };
 
 const indexedNumber = z.number().int().nonnegative().max(100);
+export function researchUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.href.length > 600) return undefined;
+    return url.href;
+  } catch { return undefined; }
+}
+
 export const keywordEvidenceSchema = z.object({
   term: z.string().trim().min(1).max(180),
   provider: z.enum(keywordProviders),
@@ -21,6 +29,7 @@ export const keywordEvidenceSchema = z.object({
   difficulty: indexedNumber.optional(),
   weakSites: indexedNumber.optional(),
   intent: z.enum(["informational", "commercial", "transactional", "navigational"]).optional(),
+  serpUrls: z.array(z.string().refine((url) => Boolean(researchUrl(url)))).max(10).optional(),
   added: z.string().date(),
 });
 export const keywordBoardSchema = z.object({
@@ -82,6 +91,7 @@ export function importKeywordCsv(csv: string, provider: KeywordEvidence["provide
   const difficulty = provider === "LowFruits" ? column("sd", "serpdifficulty", "serpdifficultyscore", "serpscore") : column("keyworddifficulty", "keyworddifficultypercent", "difficulty", "kd");
   const weak = column("weakwebsites", "weakspots", "weakdomains", "weakwebsitescount", "weakspotscount");
   const intent = column("intent", "intents", "searchintent", "in");
+  const serp = column("serpurls", "organicurls", "top10urls");
   if (term === -1) throw new Error("Include a Keyword, Term, or Query column in the export.");
   const readNumber = (value?: string) => {
     const clean = value?.replace(/[,%\s]/g, "");
@@ -89,10 +99,15 @@ export function importKeywordCsv(csv: string, provider: KeywordEvidence["provide
   };
   const rows = records.flatMap((record) => {
     if (record.length !== columns.length || !record[term]) return [];
+    const urls = [...new Set((record[serp] ?? "").split(/[|\n]/).flatMap((entry) => {
+      const url = researchUrl(entry.trim());
+      return url ? [url] : [];
+    }))].slice(0, 10);
     const row = keywordEvidenceSchema.safeParse({
       term: record[term], provider, market, added, volume: readNumber(record[volume]),
       difficulty: readNumber(record[difficulty]), weakSites: provider === "LowFruits" ? readNumber(record[weak]) : undefined,
       intent: keywordIntent(record[intent]),
+      ...(urls.length ? { serpUrls: urls } : {}),
     });
     return row.success ? [row.data] : [];
   });
@@ -100,15 +115,15 @@ export function importKeywordCsv(csv: string, provider: KeywordEvidence["provide
 }
 
 const stopWords = new Set(["a", "an", "the", "is", "for", "to", "how", "what", "my", "in", "at", "and", "about", "can", "do", "you", "of", "it"]);
-function terms(text: string) {
+export function keywordTerms(text: string) {
   return [...new Set((normalized(text).match(/[\p{L}\p{N}]+/gu) ?? []).filter((t) => t.length > 1 && !stopWords.has(t)))];
 }
 
 export function rankKeywords(rows: KeywordEvidence[], seed: string, audience: string, objective: KeywordObjective) {
-  const topic = terms(seed);
-  const audienceTerms = terms(audience);
+  const topic = keywordTerms(seed);
+  const audienceTerms = keywordTerms(audience);
   return rows.map((row) => {
-    const words = terms(row.term);
+    const words = keywordTerms(row.term);
     const topicMatches = topic.filter((t) => words.includes(t));
     const audienceMatches = audienceTerms.filter((t) => words.includes(t));
     const question = /^(how|why|what|when|can|does|is)\b|\?$/i.test(row.term);

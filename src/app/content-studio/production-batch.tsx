@@ -62,6 +62,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   const [projectId, setProjectId] = useState("");
   const [selectedShot, setSelectedShot] = useState(0);
   const [activity, setActivity] = useState(0);
+  const [savedResearch, setSavedResearch] = useState<{ videoId: string; csv?: string }>();
   const previewUrls = useRef(new Map<string, string>());
   const dispatchLock = useRef(false);
 
@@ -130,6 +131,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     patch(id, (item) => {
       const changes = typeof change === "function" ? change(item.spec) : change;
       const spec = { ...item.spec, ...changes };
+      if (spec.keyword.trim() !== item.spec.keyword.trim() || spec.brand !== item.spec.brand) spec.activeResearchBriefId = undefined;
       if (spec.storyStyle && Object.keys(changes).length === 1 && "media" in changes) {
         const approved = item.approved ? { ...item.approved, spec } : undefined;
         const storyEdit = item.storyEdit ? { ...item.storyEdit, storyboardApproved: undefined } : undefined;
@@ -294,7 +296,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     clearPreview(id);
     patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
       spec: { ...row.spec, brand: kit === "second-spring" ? connected?.name ?? "Second Spring" : custom?.brand ?? "",
-        customContext: kit === "custom" ? custom?.customContext ?? "" : "" } }));
+        customContext: kit === "custom" ? custom?.customContext ?? "" : "", activeResearchBriefId: undefined } }));
   }
 
   const approved = items.flatMap((item) => !item.approved || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
@@ -384,6 +386,9 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
           <TopicResearch videoId={id} keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
             board={spec.keywordBoard ?? blankKeywordBoard} dataForSeo={Boolean(providers?.dataForSeo)}
+            spec={spec} youtube={savedResearch?.videoId === id ? savedResearch.csv : undefined}
+            onBriefs={(changes, affectsScript) => affectsScript ? edit(id, changes)
+              : patch(id, (row) => ({ ...row, spec: { ...row.spec, ...changes } }))}
             onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
             signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
             onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
@@ -518,7 +523,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       </article>
       {draftKey && <ProjectAgent spec={spec} kit={item.kit} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
         revision={drafts.savedRevision} stage={stage} onStage={onStage} activity={activity} canStart={Boolean(spec.keyword.trim()) && !locked && (item.kit !== "second-spring" || brandStatus === "ready")}
-        canCopy={items.length < limit} onPlan={(run, copy) => loadRunPlan(item, run, copy)} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
+        canCopy={items.length < limit} onSavedResearch={setSavedResearch} onPlan={(run, copy) => loadRunPlan(item, run, copy)} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
       </div>;
     })}
     </div>

@@ -201,3 +201,44 @@ const scriptAsset = { success: true, data: { script_id: 3, script: "Opening!", o
 assert.equal(readSubscribrNarration(scriptAsset, 3).script, "Opening!");
 assert.throws(() => readSubscribrNarration(scriptAsset, 4));
 console.log("PASS provider-specific CSV, relevance and shortlist handoff, DataForSEO response, and Subscribr imports");
+
+const { draftResearchBrief, groupGoogleKeywords, groupSavedVideos, researchBriefEvidence, researchBriefsSchema } = require("../src/lib/studio/research-briefs.ts");
+const { planningPrompt, videoTypes } = require("../src/app/content-studio/production.ts");
+const researchContext = { topic: "Hostage Talks, 2 A.M.", audience: "Women experiencing perimenopause", duration: 30,
+  format: videoTypes.skit.label, direction: videoTypes.skit.direction };
+const sharedUrls = "https://www.example.com/a?test=1|https://example.com/b/|https://example.com/c#heading";
+const samePages = "https://example.com/a|https://www.example.com/b|https://example.com/c/";
+const distinctPages = "https://example.com/d|https://example.com/e|https://example.com/f";
+const csv = `Keyword,Volume,Intent,SERP URLs\nhot flashes at night,200,I,${sharedUrls}|javascript:alert(1)\nnight sweats,100,I,${samePages}\nhot flashes at night product,80,C,${distinctPages}`;
+const imported = importKeywordCsv(csv, "Ahrefs", "US", keyDate);
+assert.equal(imported.rows[0].serpUrls.length, 3);
+const groups = groupGoogleKeywords({ ...board, seed: "hot flashes at night", rows: [...imported.rows,
+  { ...imported.rows[0], market: "GB" }, ...semrush.rows] }, researchContext);
+const verified = groups.find(({ kind }) => kind === "google-results");
+assert.deepEqual(verified.members.map(({ title }) => title), ["hot flashes at night", "night sweats"]);
+assert.equal(verified.sources.length, 3);
+assert.equal(groups.filter((group) => group.kind === "google-results").length, 1);
+assert(groups.some((group) => group.scope === "GB" && group.members[0].title === "hot flashes at night"));
+assert(groups.some((group) => group.kind === "google-terms" && group.members[0].title === "hot flashes at night product"));
+const candidateBrief = draftResearchBrief(verified, researchContext, "3fa85f64-5717-4562-b3fc-2c963f66afa6");
+assert.deepEqual(researchBriefsSchema.parse(JSON.parse(JSON.stringify([candidateBrief]))), [candidateBrief]);
+assert.equal(researchBriefEvidence([candidateBrief]), "");
+const configured = { ...originalProject.spec, brand: "Second Spring", type: "skit", ratio: "9:16", researchBriefs: [candidateBrief] };
+assert.doesNotMatch(planningPrompt(configured, "Second Spring"), /Creator-selected research brief/);
+assert.match(planningPrompt({ ...configured, activeResearchBriefId: candidateBrief.id }, "Second Spring"), /Creator-selected research brief.*night sweats/);
+console.log("PASS saved SERP overlap, market and intent boundaries, brief roundtrip and opt-in prompt handoff");
+
+if (process.argv[2]) {
+  const saved = fs.readFileSync(process.argv[2], "utf8");
+  const groups = groupSavedVideos(saved, researchContext.topic, researchContext.audience);
+  const night = groups.find(({ label }) => label === "Late-night moments");
+  assert(night?.members.length >= 2);
+  assert(night.members.some(({ title }) => /after dark/i.test(title)));
+  assert(night.members.some(({ title }) => /3am/i.test(title)));
+  const brief = draftResearchBrief(night, researchContext, "1ec844cd-18c5-461b-a2b9-cbf540aa3f3a");
+  assert.equal(brief.kind, "youtube");
+  assert(brief.sources.every(({ url }) => /youtube\.com\/shorts\//.test(url)));
+  assert.match(brief.beats, /^30s comedy skit/);
+  assert.match(researchBriefEvidence([brief], brief.id), /original footage and dialogue/);
+  console.log(`PASS saved Second Spring research → ${groups.length} themes → ${brief.title} with ${brief.sources.length} source videos → 30-second brief`);
+}

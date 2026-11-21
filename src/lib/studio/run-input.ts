@@ -8,6 +8,7 @@ import { operatorFor } from "@/lib/observability/operator";
 import type { Session } from "@/lib/session";
 import { studioMediaPerProject } from "./media-types";
 import { keywordBoardSchema, selectedKeywordEvidence } from "./keyword-research";
+import { researchBriefEvidence, researchBriefsSchema } from "./research-briefs";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
@@ -24,6 +25,7 @@ const project = z.object({
     voice: z.object({ style: z.string().max(100), language: z.string().max(80).optional(), rate: z.number().min(0.5).max(2) }).optional(),
     reference: z.string().max(6000), referenceLinks: z.array(z.string().max(2000)).max(15).optional(),
     keywordBoard: keywordBoardSchema.optional(),
+    researchBriefs: researchBriefsSchema.optional(), activeResearchBriefId: z.uuid().optional(),
     subscribrSource: z.object({ id: z.number().int().positive(), version: z.number().int().nonnegative(), title: z.string().max(255),
       kind: z.enum(["script", "outline"]), text: z.string().max(12000) }).optional(),
     media: z.preprocess((value) => Array.isArray(value) ? value.slice(0, studioMediaPerProject) : value,
@@ -49,7 +51,8 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
     spec.audience ||= data.registry.audience ?? undefined;
     context = brandBrief(data);
   }
-  const notes = [spec.reference, spec.referenceLinks?.join("\n"), selectedKeywordEvidence(spec.keywordBoard), `Frames: ${chosenFrames(spec).join(", ")}`,
+  const notes = [spec.reference, spec.referenceLinks?.join("\n"), selectedKeywordEvidence(spec.keywordBoard),
+    researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId), `Frames: ${chosenFrames(spec).join(", ")}`,
     spec.storyStyle ? `Production direction: ${storyLabels[spec.storyStyle]}` : "",
     spec.media?.length ? `Private reference filenames: ${spec.media.map(({ name }) => name).join(", ")}` : ""].filter(Boolean).join("\n\n");
   if (input.kind === "suggestion" && !["angles", "story-pitches"].includes(input.suggestion.action)) {

@@ -126,7 +126,7 @@ export function ResearchKeywordBoard({ videoId, topic, audience, value, onChange
           const file = event.target.files?.[0]; event.target.value = ""; if (file) void readFile(file);
         }} /></label>
       </div>
-      <p className="production-hint">Import LowFruits, Semrush, Ahrefs, or DataForSEO exports. CSV and TSV stay private in this project.</p>
+      <p className="production-hint">Import keyword exports from LowFruits, Semrush, Ahrefs, or DataForSEO. To group by shared Google results, add a <code>SERP URLs</code> column with up to 10 organic URLs per keyword, separated by <code>|</code>.</p>
     </details>
     {status && <p role="status">{status}</p>}
     {value.rows.length > 0 && <>

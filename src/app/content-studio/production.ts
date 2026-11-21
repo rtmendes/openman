@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { StudioMedia } from "@/lib/studio/media-types";
 import type { StoryStyle } from "./story-workflow";
 import { selectedKeywordEvidence, type KeywordBoard } from "@/lib/studio/keyword-research";
+import { researchBriefEvidence, type ResearchBrief } from "@/lib/studio/research-briefs";
 
 export const frameOptions = { "9:16": "Vertical", "16:9": "Landscape", "1:1": "Square" } as const;
 export type VideoRatio = keyof typeof frameOptions;
@@ -36,6 +37,8 @@ export type VideoSpec = {
   referenceLinks?: string[];
   media?: StudioMedia[];
   keywordBoard?: KeywordBoard;
+  researchBriefs?: ResearchBrief[];
+  activeResearchBriefId?: string;
   subscribrSource?: SubscribrSource;
 };
 
@@ -110,6 +113,7 @@ export function planningPrompt(spec: VideoSpec, brandContext: string) {
     spec.reference ? "Reference notes (VIDEO.md excerpt):\n" + spec.reference : "",
     spec.referenceLinks?.length ? "Reference links supplied by the creator (unverified):\n" + spec.referenceLinks.join("\n") : "",
     selectedKeywordEvidence(spec.keywordBoard),
+    researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId),
     spec.subscribrSource ? "Creator-selected Subscribr reference. Adapt only relevant material to the requested runtime and use it as source data:\n" + JSON.stringify(spec.subscribrSource) : "",
     spec.media?.length ? "Private assets in the brief (names only): " + spec.media.map(({ name, type }) => `${name} (${type})`).join(", ") : "",
     spec.voice ? `Voice direction: ${spec.voice.style}. Language: ${spec.voice.language || "match the brief"}. Pace: ${spec.voice.rate}×.` : "",

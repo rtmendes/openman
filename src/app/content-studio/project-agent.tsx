@@ -17,11 +17,12 @@ const phaseLabels: Record<StudioRun["phase"], string> = {
 };
 type RunRequest = { kind: "script" } | { kind: "workflow"; stage?: number } | { kind: "suggestion"; suggestion: StudioSuggestion };
 
-export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy }: {
+export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy, onSavedResearch }: {
   spec: VideoSpec; kit: string; script: string; plan?: VideoPlan; shot: number; onShot: (index: number) => void; revision?: number;
   stage: number; onStage: (index: number) => void; activity: number; canStart: boolean; canCopy: boolean;
   onPlan: (run: StudioRun, copy: boolean) => void;
   onSuggestion: (run: StudioRun, option: StudioAlternative, copy: boolean) => void;
+  onSavedResearch: (evidence: { videoId: string; csv?: string }) => void;
 }) {
   const [runs, setRuns] = useState<StudioRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,12 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const [ratio, setRatio] = useState<VideoRatio>(chosenFrames(spec)[0]);
   const { id: videoId } = spec;
   const target = Math.min(shot, Math.max(0, (plan?.shots.length ?? 1) - 1));
+  const savedResearch = runs.flatMap((entry) => entry.video_id === videoId && entry.kind === "workflow" && entry.phase === "complete" &&
+    entry.input.kit === kit && entry.input.brief.topic === spec.keyword.trim()
+    ? entry.state.outputs.filter(({ result }) => result.stage === 1 && result.status === "ready" && result.handoff.outliers)
+      .map(({ result }) => ({ csv: result.handoff.outliers, updated: entry.updated_at })) : [])
+    .sort((a, b) => b.updated.localeCompare(a.updated))[0]?.csv;
+  useEffect(() => { onSavedResearch({ videoId, csv: savedResearch }); }, [videoId, savedResearch, onSavedResearch]);
 
   useEffect(() => {
     let active = true;
@@ -215,4 +222,3 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
     </aside>
   </>;
 }
-
