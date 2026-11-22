@@ -3,7 +3,7 @@ import { parseVideoPlan, planningPrompt, readVideoPlan } from "@/app/content-stu
 import { stages } from "@/app/content-studio/workflow";
 import { readStudioSuggestions, suggestionActions, type StudioRun, type StudioRunPhase, type StudioRunState } from "./runs";
 import { readStudioPackaging } from "./packaging";
-import { campaignPrompt, checkCampaignOutput } from "./campaign-workflow";
+import { campaignPrompt, campaignReviewNeedsChanges, checkCampaignOutput } from "./campaign-workflow";
 
 export const finalStudioStage = stages.length - 1;
 
@@ -108,14 +108,15 @@ export function studioDecision(run: StudioRun, action: "approve" | "retry" | "st
     if (action === "retry" && (run.phase === "blocked" || run.phase === "review")) {
       const { campaign: progress, stage, outputs } = state;
       if (stage === 2 && progress?.review) {
-        const changes = progress.review.flatMap(({ intent, blockers }) => blockers.map((blocker) => `${intent}: ${blocker}`));
+        const changes = progress.review.filter(campaignReviewNeedsChanges)
+          .flatMap(({ intent, note, blockers }) => [note, ...blockers].map((change) => `${intent}: ${change}`));
         return { phase: "queued", state: { stage: 1, outputs, campaign: { strategy: progress.strategy }, notes: [notes, ...changes].filter(Boolean).join("\n").slice(0, 3200) } };
       }
       return { phase: "queued", state: { stage, outputs, campaign: stage === 0 ? undefined : progress, notes } };
     }
     if (action !== "approve" || run.phase !== "review") return null;
     if (state.stage === 0 && state.campaign?.strategy) return { phase: "queued", state: { stage: 1, outputs: state.outputs, campaign: state.campaign } };
-    if (state.stage === 2 && state.campaign?.review?.every(({ blockers }) => !blockers.length) && state.campaign.creatives?.length === 3) return { phase: "complete", state };
+    if (state.stage === 2 && state.campaign?.review?.length === 3 && !state.campaign.review.some(campaignReviewNeedsChanges) && state.campaign.creatives?.length === 3) return { phase: "complete", state };
     return null;
   }
   if (action === "retry" && (run.phase === "blocked" || run.phase === "review")) {

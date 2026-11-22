@@ -310,6 +310,11 @@ const checks = intents.map((intent) => ({ intent, opening: 4, brandFit: 4, proof
 const blocked = checkedStudioOutput(reviewRun, JSON.stringify({ checks: [{ ...checks[0], opening: 2, blockers: ["Shot 1: Replace the empty setup with the note."] }, ...checks.slice(1)] }));
 assert.equal(blocked.phase, "blocked");
 assert.equal(studioDecision({ ...reviewRun, ...blocked }, "approve", ""), null);
+const weakAction = { ...checks[2], action: 3, note: "Replace the opening with a standalone question. " + "Keep the exact offer language and show a confirmed next step. ".repeat(12) };
+const scoredHold = checkedStudioOutput(reviewRun, JSON.stringify({ checks: [...checks.slice(0, 2), weakAction] }));
+assert.equal(scoredHold.phase, "blocked");
+assert.equal(studioDecision({ ...reviewRun, ...scoredHold, phase: "review" }, "approve", ""), null);
+assert.match(studioDecision({ ...reviewRun, ...scoredHold }, "retry", "").state.notes, /standalone question/);
 const retry = studioDecision({ ...reviewRun, ...blocked }, "retry", "Keep the humor dry.");
 assert.equal(retry.state.stage, 1);
 assert.match(retry.state.notes, /Shot 1.*note/);

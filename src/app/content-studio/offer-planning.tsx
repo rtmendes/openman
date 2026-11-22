@@ -1,7 +1,7 @@
 "use client";
 
 import { emptyOffer, inventoryRecommendation, type InventoryEntry, type OfferInput } from "@/lib/studio/campaign-input";
-import { campaignEvidence, offerStages } from "@/lib/studio/campaign-workflow";
+import { campaignEvidence, campaignReviewNeedsChanges, offerStages } from "@/lib/studio/campaign-workflow";
 import type { StudioRun } from "@/lib/studio/runs";
 
 const audiences = { discover: "Discovery", consider: "Consideration", act: "Action" } as const;
@@ -92,7 +92,7 @@ export function OfferCampaignResult({ run }: { run: StudioRun }) {
           </li>)}</ol>
         </details>}
         {review && <div className="studio-keyword-pick">
-          <strong>Creative review</strong><p>{review.note}</p>
+          <strong>{campaignReviewNeedsChanges(review) ? "Changes needed" : "Passed creative review"}</strong><p>{review.note}</p>
           <p className="production-hint">Opening {review.opening}/5 · Brand {review.brandFit}/5 · Proof {review.proof}/5 · Feasibility {review.feasibility}/5 · Action {review.action}/5</p>
           {review.blockers.length > 0 && <ul>{review.blockers.map((blocker, index) => <li key={index}>{blocker}</li>)}</ul>}
         </div>}

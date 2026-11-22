@@ -37,9 +37,13 @@ type CampaignCreative = Omit<z.infer<typeof creativeSchema>, "plan"> & { plan: V
 const reviewSchema = z.array(z.object({
   intent: z.enum(stages), opening: z.number().int().min(0).max(5), brandFit: z.number().int().min(0).max(5),
   proof: z.number().int().min(0).max(5), feasibility: z.number().int().min(0).max(5), action: z.number().int().min(0).max(5),
-  note: short(650), blockers: z.array(short(650)).max(6),
+  note: short(1200), blockers: z.array(short(650)).max(6),
 })).length(3);
 type CampaignReview = z.infer<typeof reviewSchema>;
+export function campaignReviewNeedsChanges(item: CampaignReview[number]) {
+  return item.blockers.length > 0 || Math.min(item.opening, item.brandFit, item.proof, item.feasibility, item.action) < 4;
+}
+
 export type CampaignState = { strategy?: CampaignStrategy; creatives?: CampaignCreative[]; review?: CampaignReview };
 
 const clean = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -104,7 +108,7 @@ export function campaignPrompt(run: StudioRun) {
   return [...shared, plan,
     `Creative material to review (no producer rationale): ${JSON.stringify(progress.creatives.map(({ intent, firstFrame, thumbnail, thumbnailDirection, plan }) => ({ intent, firstFrame, thumbnail, thumbnailDirection, plan })))}`,
     "Role: independent creative reviewer. Score each piece 0–5 in five dimensions: opening (recognizable moment, immediate specificity and meaningful first image); brand fit (audience language and brand guardrails); proof (offer terms trace to supplied facts, qualified claims, source relevance); feasibility (runtime, rights, footage, readable frame); action (one goal and a natural next step). Score 5 only for an excellent, usable result; 4 for solid; 3 or below when changes are needed. Give a concrete note for each piece. Block unsupported claims, mismatched actions, unreadable framing or unshootable dependencies. For each blocker cite the exact shot or copy and the smallest useful fix. No blockers is valid when the piece passes.",
-    "Give exactly three checks in discover, consider, act order. Keep each note and blocker to 650 characters and at most six blockers per creative. Keep production reminders separate from blockers and distinguish supplied facts from references.",
+    "Give exactly three checks in discover, consider, act order. Keep each note to 1200 characters and each blocker to 650, with at most six blockers per creative. A score below four holds the batch for changes, even if the blockers array is empty. Explain the change in the note or blockers. Keep production reminders separate from blockers and distinguish supplied facts from references.",
     'Shape: {"checks":[{"intent":"discover|consider|act","opening":4,"brandFit":4,"proof":4,"feasibility":4,"action":4,"note":"specific evaluation","blockers":[]}]}',
   ].filter(Boolean).join("\n\n");
 }
@@ -152,10 +156,8 @@ export function checkCampaignOutput(run: StudioRun, output: string) {
   }
   if (!prior.creatives) throw new Error("Missing the validated creative batch.");
   const review = z.object({ checks: reviewSchema }).parse(value).checks;
-  if (!ordered(review) || review.some((item) => Math.min(item.opening, item.brandFit, item.proof, item.feasibility, item.action) < 4 && !item.blockers.length)) {
-    throw new Error("Review each slot in order and explain every score below four with a specific fix.");
-  }
-  const blocked = review.some(({ blockers }) => blockers.length);
+  if (!ordered(review)) throw new Error("Review each slot in discovery, consideration and action order.");
+  const blocked = review.some(campaignReviewNeedsChanges);
   return { phase: blocked ? "blocked" : "review", state: { ...run.state, campaign: { ...prior, review },
     message: blocked ? "The reviewer found changes to make. Review the notes before choosing whether to revise the creatives." : undefined } } as const;
 }
