@@ -4,9 +4,10 @@ import { readBody } from "@/lib/agent/server/http";
 import { addStudioRun, approvedStudioResearch, changeStudioRun, studioRun, studioRuns } from "@/lib/db/studio-runs";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
+import { DbStore } from "@/lib/store/db-store";
 import { driveStudioRun, stopStudioTask } from "@/lib/studio/dispatcher";
 import { runInput } from "@/lib/studio/run-input";
-import { finalStudioStage, studioDecision } from "@/lib/studio/run-output";
+import { checkedStudioOutput, finalStudioStage, studioDecision } from "@/lib/studio/run-output";
 import { changeStudioRunSchema, startStudioRunSchema, type StudioRun } from "@/lib/studio/runs";
 
 const headers = { "Cache-Control": "private, no-store" };
@@ -70,8 +71,24 @@ export const PATCH = withErrorReporting("studio.runs.decide", async (req) => {
   const { id, version, action, notes } = body.data;
   const run = await studioRun(userId, id);
   if (!run) return reply({ error: "Run not found." }, 404);
+  if (run.version !== version) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
+  if (action === "recheck") {
+    if (!run.input.campaign || run.phase !== "blocked" || run.state.stage !== 0 || !run.state.taskId) {
+      return reply({ error: "Only a blocked editorial plan with a saved reply can be rechecked." }, 409);
+    }
+    const store = new DbStore(userId);
+    const task = await store.getTask(run.state.taskId);
+    if (task?.status !== "completed") return reply({ error: "There is no completed agent reply to recheck." }, 409);
+    const saved = (await store.listEvents(run.state.taskId)).findLast((event) => event.type === "message.completed");
+    let checked;
+    try { checked = checkedStudioOutput(run, saved?.text ?? ""); }
+    catch { return reply({ error: "The saved plan still does not pass validation." }, 422); }
+    if (checked.phase !== "review") return reply({ error: "The saved plan could not be sent to review." }, 422);
+    const recovered = await changeStudioRun(userId, run, "review", { ...checked.state, message: undefined });
+    return recovered ? reply({ run: recovered }) : reply({ error: "This run changed. Refresh its status and try again." }, 409);
+  }
   const next = studioDecision(run, action, notes);
-  if (run.version !== version || !next) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
+  if (!next) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
   const updated: StudioRun | null = await changeStudioRun(userId, run, next.phase, next.state);
   if (!updated) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
   if (updated.phase === "queued") after(() => driveStudioRun(userId, id));

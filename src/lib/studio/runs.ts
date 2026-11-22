@@ -30,7 +30,7 @@ export const startStudioRunSchema = z.discriminatedUnion("kind", [
   request.extend({ kind: z.literal("suggestion"), suggestion }),
 ]);
 export const changeStudioRunSchema = z.object({
-  id: z.uuid(), version: z.number().int().positive(), action: z.enum(["approve", "retry", "stop"]),
+  id: z.uuid(), version: z.number().int().positive(), action: z.enum(["approve", "retry", "stop", "recheck"]),
   notes: z.string().trim().max(1200).default(""),
 });
 export type StartStudioRun = z.infer<typeof startStudioRunSchema>;

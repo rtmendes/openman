@@ -281,6 +281,10 @@ if (process.argv[2]) assert.match(promptForStudioRun(campaign), /Perimenopause a
 assert.throws(() => checkedStudioOutput(campaign, JSON.stringify({ ...strategy, slots: strategy.slots.map((row) => ({ ...row, evidence: ["invented-url"] })) })), /supplied evidence/);
 const requestedPlan = checkedStudioOutput(campaign, JSON.stringify(strategy));
 assert.equal(requestedPlan.phase, "review");
+const detailedPlan = { ...strategy, objective: "Compare recognition, demonstration and next-step engagement. ".repeat(8),
+  slots: strategy.slots.map((row) => ({ ...row, topic: `${row.topic}. ${"Use the actual setting and one visible action. ".repeat(6)}`,
+    payoff: row.payoff.repeat(5), assumption: row.assumption.repeat(8) })) };
+assert.equal(checkedStudioOutput({ ...campaign, phase: "blocked" }, JSON.stringify(detailedPlan)).phase, "review");
 const approvedPlan = studioDecision({ ...campaign, ...requestedPlan }, "approve", "");
 assert.equal(approvedPlan.phase, "queued");
 assert.equal(approvedPlan.state.stage, 1);

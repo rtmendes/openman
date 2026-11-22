@@ -92,7 +92,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
     finally { setPending(false); }
   }
 
-  async function decide(run: StudioRun, action: "approve" | "retry" | "stop") {
+  async function decide(run: StudioRun, action: "approve" | "retry" | "stop" | "recheck") {
     setPending(true);
     setError("");
     try {
@@ -241,6 +241,8 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
           ? run.state.stage === 0 ? "Approve plan and draft creatives" : "Approve creative batch" : run.state.plan ? "Approve script" : "Approve stage"}</button>}
         {(run.phase === "review" || run.phase === "blocked") && <button type="button" disabled={pending} onClick={() => void decide(run, "retry")}>
           {campaign && run.state.campaign?.review ? "Revise creatives" : "Retry this step"}</button>}
+        {campaign && run.phase === "blocked" && run.state.stage === 0 && run.state.taskId &&
+          <button type="button" disabled={pending} onClick={() => void decide(run, "recheck")}>Recheck saved reply</button>}
         {!["complete", "stopped"].includes(run.phase) && <button type="button" disabled={pending} onClick={() => void decide(run, "stop")}>Stop run</button>}
       </div>
     </section>}

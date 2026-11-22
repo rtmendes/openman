@@ -270,9 +270,9 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       if (items.some(({ campaignCreative }) => campaignCreative?.runId === run.id && campaignCreative.intent === creative.intent)) return [];
       const slot = strategy.slots.find(({ intent }) => intent === creative.intent);
       if (!slot) return [];
-      const notes = [`Editorial slot: ${slot.placement} · ${slot.intent}`, `Audience question: ${slot.audienceQuestion}`, `First frame: ${creative.firstFrame}`,
+      const notes = [`Editorial slot: ${slot.placement} · ${slot.intent}`, `Planned topic: ${slot.topic}`, `Audience question: ${slot.audienceQuestion}`, `First frame: ${creative.firstFrame}`,
         `Thumbnail: ${creative.thumbnail} · ${creative.thumbnailDirection}`, ...creative.assumptions, spec.reference].filter(Boolean).join("\n\n");
-      return [{ spec: { ...spec, keyword: slot.topic, reference: notes.slice(0, 6000), activeResearchBriefId: undefined }, kit,
+      return [{ spec: { ...spec, keyword: slot.topic.length <= 180 ? slot.topic : creative.plan.title, reference: notes.slice(0, 6000), activeResearchBriefId: undefined }, kit,
         script: JSON.stringify(creative.plan, null, 2), variationLabel: creative.plan.title, campaignCreative: { runId: run.id, intent: creative.intent } }];
     });
     if (!copies.length) { setNotice("These approved creatives are already in your projects."); return; }

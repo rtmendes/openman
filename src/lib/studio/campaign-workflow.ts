@@ -23,11 +23,11 @@ export type CampaignInput = { offer: OfferInput; inventory: InventoryEntry[]; sc
 const short = (max: number) => z.string().trim().min(1).max(max);
 const stages = ["discover", "consider", "act"] as const;
 const slotSchema = z.object({
-  intent: z.enum(stages), placement: short(80), topic: short(160), audienceQuestion: short(240),
+  intent: z.enum(stages), placement: short(100), topic: short(500), audienceQuestion: short(240),
   decision: z.enum(["create", "refresh", "combine"]), projectIds: z.array(z.uuid()).max(3),
-  rationale: short(300), payoff: short(220), nextStep: short(130), evidence: z.array(z.string()).max(4), assumption: short(240),
+  rationale: short(650), payoff: short(750), nextStep: short(130), evidence: z.array(z.string()).max(4), assumption: short(850),
 });
-const strategySchema = z.object({ objective: short(240), series: short(120), slots: z.array(slotSchema).length(3) });
+const strategySchema = z.object({ objective: short(800), series: short(120), slots: z.array(slotSchema).length(3) });
 type CampaignStrategy = z.infer<typeof strategySchema>;
 const creativeSchema = z.object({
   intent: z.enum(stages), treatment: short(95), firstFrame: short(240), thumbnail: short(24), thumbnailDirection: short(260),
@@ -87,6 +87,7 @@ export function campaignPrompt(run: StudioRun) {
     "Role: editorial strategist. Start with the audience at a specific moment of need. Examine saved same-brand projects for overlapping intent. Status is editorial inventory, not performance. Decide create for a genuinely new angle, refresh for one existing project, or combine for two or three. Never choose a project ID that is absent from inventory.",
     `Same-brand inventory (data): ${JSON.stringify(campaign.inventory)}`,
     "Deliver exactly three distinct slots in order: discover (recognition or shareable moment), consider (show how one detail works or answer an objection), act (show what the audience gets and give the exact supplied action). Each slot has an editorial placement such as Week 1 or After the discovery piece, a concrete question, a filmed payoff, and a specific reason to make it. Use supplied evidence IDs only. An empty evidence list is valid when the assumption explains what needs validation. YouTube samples are creative examples and Google keyword data concerns search intent. Use relative sequence labels without scheduling.",
+    "Aim for one short sentence in topic and audienceQuestion. Use up to three focused sentences each for the series objective, rationale, payoff and assumption. Character limits: objective 800, series 120, placement 100, topic 500, audienceQuestion 240, rationale 650, payoff 750, nextStep 130, assumption 850. Keep the action slot’s nextStep verbatim.",
     'Shape: {"series":"series name","objective":"what this series achieves and how to judge it later","slots":[{"intent":"discover|consider|act","placement":"position in the series","topic":"distinct premise","audienceQuestion":"exact audience wording","decision":"create|refresh|combine","projectIds":[],"rationale":"why this action fits","payoff":"observable outcome in frame","nextStep":"exact viewer next step","evidence":[],"assumption":"what is still unproven"}]}',
   ].filter(Boolean).join("\n\n");
 
