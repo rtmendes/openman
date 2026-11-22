@@ -299,6 +299,11 @@ const readyForReview = checkedStudioOutput(draftRun, JSON.stringify(creatives));
 assert.equal(readyForReview.phase, "queued");
 assert.equal(readyForReview.state.stage, 2);
 assert.equal(readyForReview.state.taskId, undefined);
+const detailedCreatives = { creatives: creatives.creatives.map((entry) => ({ ...entry,
+  thumbnailDirection: "Place the main object off-center with enough room above for text and keep the shot readable at a small size. ".repeat(4),
+  assumptions: Array.from({ length: 6 }, (_, index) => `Check ${index + 1} before filming. ${"Compare the prop and framing with the approved camera plan. ".repeat(4)}`),
+})) };
+assert.equal(checkedStudioOutput({ ...draftRun, phase: "blocked" }, JSON.stringify(detailedCreatives)).state.stage, 2);
 const reviewRun = { ...campaign, ...readyForReview };
 assert.match(promptForStudioRun(reviewRun), /independent creative reviewer/);
 const checks = intents.map((intent) => ({ intent, opening: 4, brandFit: 4, proof: 4, feasibility: 4, action: 4, note: "The first frame shows the promised object.", blockers: [] }));

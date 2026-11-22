@@ -73,8 +73,8 @@ export const PATCH = withErrorReporting("studio.runs.decide", async (req) => {
   if (!run) return reply({ error: "Run not found." }, 404);
   if (run.version !== version) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
   if (action === "recheck") {
-    if (!run.input.campaign || run.phase !== "blocked" || run.state.stage !== 0 || !run.state.taskId) {
-      return reply({ error: "Only a blocked editorial plan with a saved reply can be rechecked." }, 409);
+    if (!run.input.campaign || run.phase !== "blocked" || run.state.campaign?.review || !run.state.taskId) {
+      return reply({ error: "This campaign has no rejected reply to recheck." }, 409);
     }
     const store = new DbStore(userId);
     const task = await store.getTask(run.state.taskId);
@@ -82,10 +82,13 @@ export const PATCH = withErrorReporting("studio.runs.decide", async (req) => {
     const saved = (await store.listEvents(run.state.taskId)).findLast((event) => event.type === "message.completed");
     let checked;
     try { checked = checkedStudioOutput(run, saved?.text ?? ""); }
-    catch { return reply({ error: "The saved plan still does not pass validation." }, 422); }
-    if (checked.phase !== "review") return reply({ error: "The saved plan could not be sent to review." }, 422);
-    const recovered = await changeStudioRun(userId, run, "review", { ...checked.state, message: undefined });
-    return recovered ? reply({ run: recovered }) : reply({ error: "This run changed. Refresh its status and try again." }, 409);
+    catch { return reply({ error: "The saved reply still does not pass validation." }, 422); }
+    const recovered = await changeStudioRun(userId, run, checked.phase, {
+      ...checked.state, message: checked.phase === "blocked" ? checked.state.message : undefined,
+    });
+    if (!recovered) return reply({ error: "This run changed. Refresh its status and try again." }, 409);
+    if (recovered.phase === "queued") after(() => driveStudioRun(userId, id));
+    return reply({ run: recovered });
   }
   const next = studioDecision(run, action, notes);
   if (!next) return reply({ error: "This run changed. Refresh its status and try again." }, 409);

@@ -30,14 +30,14 @@ const slotSchema = z.object({
 const strategySchema = z.object({ objective: short(800), series: short(120), slots: z.array(slotSchema).length(3) });
 type CampaignStrategy = z.infer<typeof strategySchema>;
 const creativeSchema = z.object({
-  intent: z.enum(stages), treatment: short(95), firstFrame: short(240), thumbnail: short(24), thumbnailDirection: short(260),
-  proofUsed: z.boolean(), assumptions: z.array(short(180)).max(4), plan: z.unknown(),
+  intent: z.enum(stages), treatment: short(95), firstFrame: short(240), thumbnail: short(24), thumbnailDirection: short(650),
+  proofUsed: z.boolean(), assumptions: z.array(short(320)).max(8), plan: z.unknown(),
 });
 type CampaignCreative = Omit<z.infer<typeof creativeSchema>, "plan"> & { plan: VideoPlan };
 const reviewSchema = z.array(z.object({
   intent: z.enum(stages), opening: z.number().int().min(0).max(5), brandFit: z.number().int().min(0).max(5),
   proof: z.number().int().min(0).max(5), feasibility: z.number().int().min(0).max(5), action: z.number().int().min(0).max(5),
-  note: short(260), blockers: z.array(short(280)).max(4),
+  note: short(650), blockers: z.array(short(650)).max(6),
 })).length(3);
 type CampaignReview = z.infer<typeof reviewSchema>;
 export type CampaignState = { strategy?: CampaignStrategy; creatives?: CampaignCreative[]; review?: CampaignReview };
@@ -96,6 +96,7 @@ export function campaignPrompt(run: StudioRun) {
   if (stage === 1) return [...shared, plan,
     "Role: direct-response writer and shooting planner. Return exactly three assets in approved slot order. Give each a different opening image and visual device, such as a reaction, a demonstration, or a payoff insert, chosen for the brief. In the opening show an action or object the intended audience recognizes. Edit on meaningful movement or an information change. For each shot name framing, visible action or insert, overlay, sound and exact footage needed. Give the performer a pause before a punchline when the format calls for one. Write spoken lines for this audience, not filler or boilerplate.",
     `Every plan starts at zero, uses cumulative end seconds, reaches exactly ${spec.duration}s, and fits spoken words below 2.5 words per second where possible. Make thumbnail copy up to 24 characters and specify subject, empty space, contrast, and safe crop for the selected frame. Each plan includes three honest, different titles and a platform-ready description. Each act asset must say or display the supplied action verbatim in its final shot. Label any unproven production assumption. Use only filmable footage or supplied assets. If proof is used, preserve the creator's qualifications and scope.`,
+    "Character limits: treatment 95, first frame 240, thumbnail direction 650, working and alternate titles 100 each, caption 400, description 1500, shot visual 450, shot overlay 100, sound 180, asset 250. Include at most eight production assumptions, up to 320 characters each. State the exact checks or assets required without restating the pitch.",
     'Shape: {"creatives":[{"intent":"discover|consider|act","treatment":"short concept name","firstFrame":"specific shot","thumbnail":"exact short copy","thumbnailDirection":"visual layout","proofUsed":false,"assumptions":[],"plan":{"title":"working title","titleOptions":["first","second","third"],"description":"platform-ready text","caption":"post caption","shots":[{"end":3,"narration":"exact words","visual":"framing and action","overlay":"on-screen words","sound":"sound/edit cue","asset":"record or supply"}]}}]}',
   ].filter(Boolean).join("\n\n");
 
@@ -103,6 +104,7 @@ export function campaignPrompt(run: StudioRun) {
   return [...shared, plan,
     `Creative material to review (no producer rationale): ${JSON.stringify(progress.creatives.map(({ intent, firstFrame, thumbnail, thumbnailDirection, plan }) => ({ intent, firstFrame, thumbnail, thumbnailDirection, plan })))}`,
     "Role: independent creative reviewer. Score each piece 0–5 in five dimensions: opening (recognizable moment, immediate specificity and meaningful first image); brand fit (audience language and brand guardrails); proof (offer terms trace to supplied facts, qualified claims, source relevance); feasibility (runtime, rights, footage, readable frame); action (one goal and a natural next step). Score 5 only for an excellent, usable result; 4 for solid; 3 or below when changes are needed. Give a concrete note for each piece. Block unsupported claims, mismatched actions, unreadable framing or unshootable dependencies. For each blocker cite the exact shot or copy and the smallest useful fix. No blockers is valid when the piece passes.",
+    "Give exactly three checks in discover, consider, act order. Keep each note and blocker to 650 characters and at most six blockers per creative. Keep production reminders separate from blockers and distinguish supplied facts from references.",
     'Shape: {"checks":[{"intent":"discover|consider|act","opening":4,"brandFit":4,"proof":4,"feasibility":4,"action":4,"note":"specific evaluation","blockers":[]}]}',
   ].filter(Boolean).join("\n\n");
 }
