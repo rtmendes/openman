@@ -41,7 +41,17 @@ export const POST = withErrorReporting("studio.runs.start", async (req) => {
   const useResearch = campaign || input.kind === "script" || (input.kind === "workflow" && (input.stage === 2 || input.stage === finalStudioStage)) ||
     (input.kind === "suggestion" && input.suggestion.action === "story-pitches");
   const research = useResearch ? await approvedStudioResearch(session.userId, input.videoId, snapshot.brief.topic, snapshot.kit) : undefined;
-  if (snapshot.campaign && research) snapshot.campaign.scan = research.result.handoff.outliers;
+  if (snapshot.campaign) {
+    snapshot.campaign.scan = research?.result.handoff.outliers;
+    const parent = snapshot.campaign.researchParent;
+    if (!snapshot.campaign.scan && parent) {
+      const inherited = await approvedStudioResearch(session.userId, parent.videoId, parent.topic, snapshot.kit);
+      if (inherited?.result.handoff.outliers) {
+        snapshot.campaign.scan = inherited.result.handoff.outliers;
+        snapshot.campaign.researchOrigin = parent.topic;
+      }
+    }
+  }
   const run = await addStudioRun(session.userId, input, snapshot, stage, research && !campaign ? [research] : []);
   if (!run) {
     const duplicate = await studioRun(session.userId, input.id);

@@ -9,7 +9,7 @@ import type { Session } from "@/lib/session";
 import { studioMediaPerProject } from "./media-types";
 import { keywordBoardSchema, selectedKeywordEvidence } from "./keyword-research";
 import { researchBriefEvidence, researchBriefsSchema } from "./research-briefs";
-import { offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
+import { campaignResearchParent, offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
@@ -52,8 +52,10 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   const isCampaign = input.kind === "workflow" && input.workflow === "offer";
   const offer = usableOffer(spec.offer);
   if (isCampaign && !offer) throw new Response("Complete the offer details and check the evidence and destination links before starting a campaign.", { status: 400 });
-  const inventory = isCampaign ? savedContentInventory({ ...(inventoryDraft.safeParse(row).data ?? { kit, script }), spec },
-    (draft.items as unknown[]).flatMap((candidate) => inventoryDraft.safeParse(candidate).data ?? [])) : [];
+  const campaignDraft = { ...(inventoryDraft.safeParse(row).data ?? { kit, script }), spec };
+  const draftInventory = isCampaign ? (draft.items as unknown[]).flatMap((candidate) => inventoryDraft.safeParse(candidate).data ?? []) : [];
+  const campaign = isCampaign && offer ? { offer, inventory: savedContentInventory(campaignDraft, draftInventory),
+    researchParent: campaignResearchParent(campaignDraft, draftInventory) } : undefined;
   let context = spec.customContext.trim();
   if (kit === "second-spring") {
     if (!(await operatorFor(session))?.owner) throw new Response("The connected brand kit is unavailable.", { status: 404 });
@@ -83,6 +85,6 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
       format: videoTypes[spec.type].label, platforms: spec.platforms ?? [...platforms], runtimeSeconds: spec.duration, notes, brandContext: context },
     ...(input.kind === "workflow" && input.stage !== undefined ? { singleStage: input.stage } : {}),
     ...(input.kind === "suggestion" ? { suggestion: input.suggestion } : {}),
-    ...(isCampaign && offer ? { campaign: { offer, inventory } } : {}),
+    ...(campaign ? { campaign } : {}),
   };
 }

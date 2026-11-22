@@ -243,7 +243,7 @@ if (process.argv[2]) {
   console.log(`PASS saved Second Spring research → ${groups.length} themes → ${brief.title} with ${brief.sources.length} source videos → 30-second brief`);
 }
 
-const { emptyOffer, missingOfferFields, savedContentInventory, usableOffer } = require("../src/lib/studio/campaign-input.ts");
+const { campaignResearchParent, emptyOffer, missingOfferFields, savedContentInventory, usableOffer } = require("../src/lib/studio/campaign-input.ts");
 const { startStudioRunSchema } = require("../src/lib/studio/runs.ts");
 const primaryId = "6902919c-a792-4dad-8b5c-3ed4da32a694";
 const variantId = "8cfb02c4-2dfc-4eb7-a405-ea0af40bef57";
@@ -255,6 +255,10 @@ assert.equal(usableOffer({ ...offer, proofUrl: "https://example.com/proof" }), u
 assert.equal(usableOffer({ ...offer, destination: "javascript:alert(1)" }), undefined);
 assert.deepEqual(usableOffer(offer), offer);
 const editorial = { ...originalProject, spec: { ...configured, id: primaryId, offer } };
+const deadpan = { ...editorial, variationOf: primaryId, spec: { ...editorial.spec, id: variantId, keyword: `${editorial.spec.keyword} · Deadpan cut` } };
+assert.deepEqual(campaignResearchParent(deadpan, [editorial, deadpan]), { videoId: primaryId, topic: editorial.spec.keyword });
+assert.equal(campaignResearchParent({ ...deadpan, spec: { ...deadpan.spec, brand: "Other" } }, [editorial]), undefined);
+assert.equal(campaignResearchParent({ ...deadpan, spec: { ...deadpan.spec, keyword: "Different topic" } }, [editorial]), undefined);
 const inventory = savedContentInventory(editorial, [editorial, { ...editorial, variationOf: primaryId, spec: { ...editorial.spec, id: variantId } },
   { ...editorial, kit: "custom", spec: { ...editorial.spec, id: customId } }]);
 assert.deepEqual(inventory.map(({ id, status, variations }) => [id, status, variations]), [[primaryId, "script", 1]]);
@@ -271,6 +275,7 @@ const strategy = { series: "The small bedtime reset", objective: "See whether th
     payoff: ["A sticky-note counteroffer", "One visible nightstand setup", "The actual printable page"][index],
     nextStep: index === 2 ? offer.action : "Watch the next piece", evidence: process.argv[2] ? ["video-1"] : [], assumption: "Confirm that the setup is easy to film." })) };
 assert.match(promptForStudioRun(campaign), /Role: editorial strategist/);
+assert.match(promptForStudioRun(campaign), /Current cut \(creative reference only/);
 if (process.argv[2]) assert.match(promptForStudioRun(campaign), /Perimenopause after dark/);
 assert.throws(() => checkedStudioOutput(campaign, JSON.stringify({ ...strategy, slots: strategy.slots.map((row) => ({ ...row, evidence: ["invented-url"] })) })), /supplied evidence/);
 const requestedPlan = checkedStudioOutput(campaign, JSON.stringify(strategy));

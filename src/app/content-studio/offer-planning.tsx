@@ -59,6 +59,7 @@ export function OfferCampaignResult({ run }: { run: StudioRun }) {
   return <section aria-label="Editorial plan and creatives" className="studio-research-groups">
     <h4>{output.strategy.series}</h4>
     <p className="production-hint">{run.input.campaign?.offer.name} · Saved revision {run.input.revision}</p>
+    {run.input.campaign?.researchOrigin && <p className="production-hint">Uses the approved scan from {run.input.campaign.researchOrigin}.</p>}
     <p>{output.strategy.objective}</p>
     {output.strategy.slots.map((slot) => {
       const creative = output.creatives?.find(({ intent }) => intent === slot.intent);

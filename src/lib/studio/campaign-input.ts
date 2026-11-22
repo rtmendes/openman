@@ -33,6 +33,15 @@ export type InventoryEntry = {
 
 const identity = (value?: string) => value?.normalize("NFKC").toLowerCase().trim() ?? "";
 
+export function campaignResearchParent(target: InventoryDraft, drafts: InventoryDraft[]) {
+  const parent = drafts.find(({ spec }) => spec.id === target.variationOf && spec.id !== target.spec.id);
+  if (!parent || parent.kit !== target.kit || identity(parent.spec.brand) !== identity(target.spec.brand)) return undefined;
+  const topic = identity(parent.spec.keyword);
+  const variation = identity(target.spec.keyword);
+  if (!topic || (variation !== topic && !variation.startsWith(`${topic} · `))) return undefined;
+  return { videoId: parent.spec.id, topic: parent.spec.keyword.trim() };
+}
+
 export function savedContentInventory(target: InventoryDraft, drafts: InventoryDraft[]): InventoryEntry[] {
   const brand = identity(target.spec.brand);
   const root = target.variationOf ?? target.spec.id;
