@@ -243,7 +243,7 @@ if (process.argv[2]) {
   console.log(`PASS saved Second Spring research → ${groups.length} themes → ${brief.title} with ${brief.sources.length} source videos → 30-second brief`);
 }
 
-const { campaignResearchParent, emptyOffer, missingOfferFields, savedContentInventory, usableOffer } = require("../src/lib/studio/campaign-input.ts");
+const { campaignInventoryDraftSchema, campaignResearchParent, emptyOffer, missingOfferFields, savedContentInventory, usableOffer } = require("../src/lib/studio/campaign-input.ts");
 const { startStudioRunSchema } = require("../src/lib/studio/runs.ts");
 const primaryId = "6902919c-a792-4dad-8b5c-3ed4da32a694";
 const variantId = "8cfb02c4-2dfc-4eb7-a405-ea0af40bef57";
@@ -256,7 +256,8 @@ assert.equal(usableOffer({ ...offer, destination: "javascript:alert(1)" }), unde
 assert.deepEqual(usableOffer(offer), offer);
 const editorial = { ...originalProject, spec: { ...configured, id: primaryId, offer } };
 const deadpan = { ...editorial, variationOf: primaryId, spec: { ...editorial.spec, id: variantId, keyword: `${editorial.spec.keyword} · Deadpan cut` } };
-assert.deepEqual(campaignResearchParent(deadpan, [editorial, deadpan]), { videoId: primaryId, topic: editorial.spec.keyword });
+const persistedDrafts = JSON.parse(JSON.stringify([editorial, deadpan])).map((item) => campaignInventoryDraftSchema.parse(item));
+assert.deepEqual(campaignResearchParent(persistedDrafts[1], persistedDrafts), { videoId: primaryId, topic: editorial.spec.keyword });
 assert.equal(campaignResearchParent({ ...deadpan, spec: { ...deadpan.spec, brand: "Other" } }, [editorial]), undefined);
 assert.equal(campaignResearchParent({ ...deadpan, spec: { ...deadpan.spec, keyword: "Different topic" } }, [editorial]), undefined);
 const inventory = savedContentInventory(editorial, [editorial, { ...editorial, variationOf: primaryId, spec: { ...editorial.spec, id: variantId } },

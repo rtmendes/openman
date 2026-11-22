@@ -9,7 +9,7 @@ import type { Session } from "@/lib/session";
 import { studioMediaPerProject } from "./media-types";
 import { keywordBoardSchema, selectedKeywordEvidence } from "./keyword-research";
 import { researchBriefEvidence, researchBriefsSchema } from "./research-briefs";
-import { campaignResearchParent, offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
+import { campaignInventoryDraftSchema, campaignResearchParent, offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
@@ -35,12 +35,6 @@ const project = z.object({
   }),
 });
 
-const inventoryDraft = z.object({
-  kit: z.enum(["custom", "second-spring"]), script: z.string(), variationOf: z.string().optional(),
-  approved: z.unknown(), renders: z.array(z.unknown()).optional(),
-  spec: z.object({ id: z.uuid(), keyword: z.string(), brand: z.string().optional(), offer: offerInputSchema.optional(), researchBriefs: researchBriefsSchema.optional() }),
-});
-
 export async function runInput(session: Session, input: StartStudioRun): Promise<StudioRunInput> {
   const draft = await studioDraft(session.userId);
   if (!draft || draft.revision !== input.revision) throw new Response("Save the latest project before starting a run.", { status: 409 });
@@ -52,8 +46,8 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   const isCampaign = input.kind === "workflow" && input.workflow === "offer";
   const offer = usableOffer(spec.offer);
   if (isCampaign && !offer) throw new Response("Complete the offer details and check the evidence and destination links before starting a campaign.", { status: 400 });
-  const campaignDraft = { ...(inventoryDraft.safeParse(row).data ?? { kit, script }), spec };
-  const draftInventory = isCampaign ? (draft.items as unknown[]).flatMap((candidate) => inventoryDraft.safeParse(candidate).data ?? []) : [];
+  const campaignDraft = { ...(campaignInventoryDraftSchema.safeParse(row).data ?? { kit, script }), spec };
+  const draftInventory = isCampaign ? (draft.items as unknown[]).flatMap((candidate) => campaignInventoryDraftSchema.safeParse(candidate).data ?? []) : [];
   const campaign = isCampaign && offer ? { offer, inventory: savedContentInventory(campaignDraft, draftInventory),
     researchParent: campaignResearchParent(campaignDraft, draftInventory) } : undefined;
   let context = spec.customContext.trim();

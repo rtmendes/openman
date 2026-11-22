@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { keywordTerms, researchUrl } from "./keyword-research";
-import type { ResearchBrief } from "./research-briefs";
+import { researchBriefsSchema } from "./research-briefs";
 
 const link = z.string().trim().max(600);
 export const offerInputSchema = z.object({
@@ -21,10 +21,12 @@ export function usableOffer(input?: OfferInput) {
     [parsed.data.proofUrl, parsed.data.destination].every((url) => !url || researchUrl(url)) ? parsed.data : undefined;
 }
 
-type InventoryDraft = {
-  kit: string; script: string; variationOf?: string; approved?: unknown; renders?: unknown[];
-  spec: { id: string; keyword: string; brand?: string; offer?: OfferInput; researchBriefs?: ResearchBrief[] };
-};
+export const campaignInventoryDraftSchema = z.object({
+  kit: z.enum(["custom", "second-spring"]), script: z.string(), variationOf: z.string().optional(),
+  approved: z.unknown().optional(), renders: z.array(z.unknown()).optional(),
+  spec: z.object({ id: z.uuid(), keyword: z.string(), brand: z.string().optional(), offer: offerInputSchema.optional(), researchBriefs: researchBriefsSchema.optional() }),
+});
+type InventoryDraft = z.infer<typeof campaignInventoryDraftSchema>;
 
 export type InventoryEntry = {
   id: string; topic: string; offer?: string; status: "brief" | "script" | "approved" | "rendered";
