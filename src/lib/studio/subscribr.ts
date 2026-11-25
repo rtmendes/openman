@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 const id = z.number().int().positive();
-const profile = z.object({ id, name: z.string().min(1).max(180), instructions: z.string().max(3000).optional() });
-const template = z.object({ id, name: z.string().min(1).max(180), description: z.string().max(1200).optional() });
+export const subscribrWritingInputId = z.union([id, z.string().max(120).regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/)]);
+const profile = z.object({ id: subscribrWritingInputId, name: z.string().min(1).max(180), instructions: z.string().max(3000).optional() });
+const template = z.object({ id: subscribrWritingInputId, name: z.string().min(1).max(180), description: z.string().max(1200).optional() });
 
 export const subscribrWritingSchema = z.object({
   channel: z.object({
@@ -20,8 +21,8 @@ export type SubscribrChannelContext = {
   channel: SubscribrWriting["channel"];
   voices: z.infer<typeof profile>[];
   templates: z.infer<typeof template>[];
-  defaultVoiceId?: number;
-  defaultTemplateId?: number;
+  defaultVoiceId?: z.infer<typeof subscribrWritingInputId>;
+  defaultTemplateId?: z.infer<typeof subscribrWritingInputId>;
   unavailable: ("voices" | "templates")[];
   readIssues?: Partial<Record<"voices" | "templates", string>>;
 };

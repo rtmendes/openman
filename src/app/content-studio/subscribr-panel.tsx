@@ -13,8 +13,8 @@ export function SubscribrPanel({ connected, current, writing, locked, onImport, 
   const [channel, setChannel] = useState(writing?.channel.id ?? 0);
   const [channelSearch, setChannelSearch] = useState("");
   const [context, setContext] = useState<SubscribrChannelContext>();
-  const [voiceId, setVoiceId] = useState(0);
-  const [templateId, setTemplateId] = useState(0);
+  const [voiceId, setVoiceId] = useState("");
+  const [templateId, setTemplateId] = useState("");
   const [scripts, setScripts] = useState<Awaited<ReturnType<typeof listSubscribrScripts>>>();
   const [search, setSearch] = useState("");
   const [usedSearch, setUsedSearch] = useState("");
@@ -23,8 +23,8 @@ export function SubscribrPanel({ connected, current, writing, locked, onImport, 
   const [status, setStatus] = useState("");
   const filtered = filterSubscribrChannels(channels ?? [], channelSearch);
   const selected = channels?.find(({ id }) => id === channel);
-  const voice = context?.voices.find(({ id }) => id === voiceId);
-  const template = context?.templates.find(({ id }) => id === templateId);
+  const voice = context?.voices.find(({ id }) => String(id) === voiceId);
+  const template = context?.templates.find(({ id }) => String(id) === templateId);
 
   async function load(action: () => Promise<void>) {
     setPending(true);
@@ -52,8 +52,8 @@ export function SubscribrPanel({ connected, current, writing, locked, onImport, 
       const result = await getSubscribrChannelContext(id);
       const saved = writing?.channel.id === id ? writing : undefined;
       setContext(result);
-      setVoiceId(saved ? saved.voice?.id ?? 0 : result.defaultVoiceId ?? 0);
-      setTemplateId(saved ? saved.template?.id ?? 0 : result.defaultTemplateId ?? 0);
+      setVoiceId(String((saved ? saved.voice?.id : result.defaultVoiceId) ?? ""));
+      setTemplateId(String((saved ? saved.template?.id : result.defaultTemplateId) ?? ""));
     });
   }
 
@@ -105,12 +105,12 @@ export function SubscribrPanel({ connected, current, writing, locked, onImport, 
           {context.channel.audience && <p><strong>Audience</strong> {context.channel.audience}</p>}
           {context.channel.description && <details><summary>Channel description</summary><p>{context.channel.description}</p></details>}
           <div className="production-fields">
-            {context.voices.length > 0 && <label>Writing voice profile<select value={voiceId} onChange={(event) => setVoiceId(Number(event.target.value))}>
-              <option value={0}>Use Mahara direction</option>
+            {context.voices.length > 0 && <label>Writing voice profile<select value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>
+              <option value="">Use Mahara direction</option>
               {context.voices.map(({ id, name }) => <option value={id} key={id}>{name}</option>)}
             </select></label>}
-            {context.templates.length > 0 && <label>Script template<select value={templateId} onChange={(event) => setTemplateId(Number(event.target.value))}>
-              <option value={0}>Use Mahara structure</option>
+            {context.templates.length > 0 && <label>Script template<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+              <option value="">Use Mahara structure</option>
               {context.templates.map(({ id, name }) => <option value={id} key={id}>{name}</option>)}
             </select></label>}
           </div>

@@ -8,7 +8,7 @@ import { logEvent } from "@/lib/observability/log";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
 import { keywordBatchSize, keywordMarkets, type KeywordLookup } from "@/lib/studio/keyword-research";
-import { readDataForSeoKeywords, readSubscribrChannelContext, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } from "@/lib/studio/provider-results";
+import { readDataForSeoKeywords, readSubscribrChannelContext, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts, subscribrResponseShape } from "@/lib/studio/provider-results";
 import { consumeUsage, UsageLimitError } from "@/lib/usage";
 
 const market = z.enum(["US", "GB", "CA", "AU"]);
@@ -140,6 +140,12 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
         const result = kind === "voices" ? voices : templates;
         return [kind, result?.issue || "unexpected response format"];
       }));
+      for (const kind of context.unavailable) {
+        const result = kind === "voices" ? voices : templates;
+        if (result?.data !== undefined) await logEvent("warn", "studio.subscribr_catalogue_format", {
+          userId: session.userId, data: { kind, shape: subscribrResponseShape(result.data) },
+        });
+      }
       return reply({ ...context, readIssues });
     }
     if (request.action === "scripts") return reply(readSubscribrScripts(data));

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { keywordEvidenceSchema, keywordIntent, type KeywordEvidence } from "./keyword-research";
-import type { SubscribrChannelContext } from "./subscribr";
+import { subscribrWritingInputId, type SubscribrChannelContext } from "./subscribr";
 
 const optionalText = z.string().nullish();
 const number = z.number().nullish();
@@ -59,12 +59,38 @@ export function readSubscribrChannels(value: unknown) {
   })), page: pagination?.current_page ?? 1, lastPage: Math.max(1, pagination?.last_page ?? 1) };
 }
 
-const providerVoice = z.object({ id: providerId, name: z.string(), instructions: optionalText });
-const providerTemplate = z.object({ id: providerId, name: z.string(), description: optionalText });
-const voicesEnvelope = envelope(z.object({ default_voice_id: providerId.nullish(), voices: z.array(z.unknown()) }));
-const templatesEnvelope = envelope(z.object({ default_template_id: providerId.nullish(), templates: z.array(z.unknown()) }));
+const providerVoice = z.object({ id: subscribrWritingInputId, name: z.string(), instructions: optionalText });
+const providerTemplate = z.object({ id: subscribrWritingInputId, name: z.string(), description: optionalText });
 const channelEnvelope = envelope(channel.extend({ settings: z.unknown(), voice: z.unknown() }));
 const boundedText = (value: unknown, limit: number) => typeof value === "string" ? value.trim().slice(0, limit) || undefined : undefined;
+const objectShape = z.record(z.string(), z.unknown());
+
+function readSubscribrWritingList(value: unknown, key: "voices" | "templates", defaultKey: "default_voice_id" | "default_template_id") {
+  const root = objectShape.safeParse(value).data;
+  if (root?.success === false) return;
+  const payload = root?.data ?? value;
+  const object = objectShape.safeParse(payload).data;
+  const entries = Array.isArray(payload) ? payload : object?.[key];
+  if (!Array.isArray(entries)) return;
+  return { entries, defaultId: subscribrWritingInputId.safeParse(object?.[defaultKey] ?? root?.[defaultKey]).data };
+}
+
+export function subscribrResponseShape(value: unknown) {
+  const knownFields = ["success", "data", "voices", "voice_profiles", "templates", "items", "entries", "results", "default", "default_voice", "default_template",
+    "default_voice_id", "default_template_id", "id", "name", "title", "instructions", "description", "error", "message"] as const;
+  function shape(input: unknown) {
+    if (Array.isArray(input)) {
+      const fields = objectShape.safeParse(input[0]).data;
+      return { type: "array", count: input.length, itemFields: knownFields.filter((key) => fields && Object.hasOwn(fields, key)) };
+    }
+    const object = objectShape.safeParse(input).data;
+    if (!object) return { type: input === null ? "null" : typeof input };
+    return { type: "object", fields: Object.fromEntries(knownFields.filter((key) => Object.hasOwn(object, key))
+      .map((key) => [key, Array.isArray(object[key]) ? "array" : typeof object[key]])) };
+  }
+  const root = objectShape.safeParse(value).data;
+  return { root: shape(value), payload: shape(root?.data), rejected: root?.success === false };
+}
 
 function voiceEntry(value: unknown) {
   const entry = providerVoice.safeParse(value);
@@ -78,25 +104,25 @@ export function readSubscribrChannelContext(value: unknown, voices: unknown, tem
   if (data.id !== id) throw new Error("Subscribr returned the wrong channel.");
   const details = z.object({ title: optionalText, description: optionalText, custom_url: optionalText }).safeParse(data.details).data;
   const settings = z.object({ audience: z.unknown() }).safeParse(data.settings).data;
-  const voiceList = voicesEnvelope.safeParse(voices).data?.data;
-  const templateList = templatesEnvelope.safeParse(templates).data?.data;
+  const voiceList = readSubscribrWritingList(voices, "voices", "default_voice_id");
+  const templateList = readSubscribrWritingList(templates, "templates", "default_template_id");
   const defaultVoice = voiceEntry(data.voice)[0];
-  const profiles = (voiceList?.voices ?? []).flatMap(voiceEntry);
-  if (defaultVoice && !profiles.some((entry) => entry.id === defaultVoice.id)) profiles.unshift(defaultVoice);
+  const profiles = (voiceList?.entries ?? []).flatMap(voiceEntry);
+  if (defaultVoice && !profiles.some((entry) => String(entry.id) === String(defaultVoice.id))) profiles.unshift(defaultVoice);
   return {
     channel: {
       id, title: boundedText(details?.title || data.title || data.name || data.yt_handle, 255) || `Channel ${id}`,
       handle: boundedText(data.yt_handle || details?.custom_url, 180), audience: boundedText(settings?.audience, 1000),
       description: boundedText(details?.description, 1500),
     },
-    voices: profiles, defaultVoiceId: voiceList?.default_voice_id ?? defaultVoice?.id,
-    templates: (templateList?.templates ?? []).flatMap((value) => {
+    voices: profiles, defaultVoiceId: voiceList?.defaultId ?? defaultVoice?.id,
+    templates: (templateList?.entries ?? []).flatMap((value) => {
       const entry = providerTemplate.safeParse(value);
       if (!entry.success) return [];
       const { id, name, description } = entry.data;
       return [{ id, name: boundedText(name, 180) || `Template ${id}`, description: boundedText(description, 1200) }];
     }),
-    defaultTemplateId: templateList?.default_template_id ?? undefined,
+    defaultTemplateId: templateList?.defaultId,
     unavailable: [...(!voiceList ? ["voices" as const] : []), ...(!templateList ? ["templates" as const] : [])],
   };
 }

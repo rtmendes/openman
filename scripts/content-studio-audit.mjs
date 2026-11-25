@@ -212,6 +212,11 @@ const writingInputs = readSubscribrChannelContext({ data: subscribrChannel }, { 
 assert.equal(writingInputs.channel.audience, "Creators");
 assert.doesNotMatch(JSON.stringify(writingInputs), /private_other_setting|Do not import/);
 assert.deepEqual(readSubscribrChannelContext({ data: subscribrChannel }, null, null, 14).unavailable, ["voices", "templates"]);
+const flatWritingInputs = readSubscribrChannelContext({ data: subscribrChannel }, { data: [subscribrChannel.voice], default_voice_id: 77 },
+  { templates: [{ id: "builtin:comedy", name: "Short Comedy" }], default_template_id: "builtin:comedy" }, 14);
+assert.equal(flatWritingInputs.defaultTemplateId, "builtin:comedy");
+assert.equal(flatWritingInputs.defaultVoiceId, 77);
+assert.deepEqual(flatWritingInputs.unavailable, []);
 assert.throws(() => readSubscribrChannelContext({ data: subscribrChannel }, null, null, 15));
 const subscribrWriting = subscribrWritingSchema.parse({ channel: writingInputs.channel, voice: writingInputs.voices[0], template: writingInputs.templates[0] });
 console.log("PASS provider-specific CSV, relevance and shortlist handoff, DataForSEO response, and Subscribr imports");
