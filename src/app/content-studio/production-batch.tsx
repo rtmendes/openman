@@ -414,6 +414,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     id: item.spec.id, title: projectTitle(item, index), stage: completionStage(item), useCase: item.organization?.useCase ?? "",
     tags: item.organization?.tags ?? [],
     location: studioProjectLocation(item, workspace.data), variation: Boolean(item.variationOf),
+    locked: Boolean(item.pending || dispatching || uploading[item.spec.id]),
   }));
   const ready = Math.min(studioBatchLimit, items.filter((item) => completionStage(item) !== "archived" && item.spec.keyword.trim() &&
     (!item.script.trim() || item.stale) && !item.pending && !item.approved).length);
@@ -422,6 +423,13 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     if (!workspace.available || !brands.some((brand) => brand.id === location.brandId)) return;
     if (location.folderId && !workspace.data.folders.some((folder) => folder.id === location.folderId && folder.brandId === location.brandId)) return;
     patch(id, (item) => item.pending || dispatching || uploading[id] ? item : applyLocation(item, location));
+  }
+
+  function renameProject(id: string, name: string) {
+    const project = projects.find((entry) => entry.id === id);
+    if (!project || project.locked) return false;
+    patch(id, (item) => ({ ...item, organization: { ...item.organization, title: name } }));
+    return true;
   }
 
   function orderProject(id: string, beforeId: string) {
@@ -551,7 +559,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={folderView ? undefined : activeId}
       openLocation={folderView} onSave={workspace.save} onReload={workspace.reload} onOpen={openProject}
       onFolder={openFolder} onNew={addVideo} onAssets={(location) => folderView ? openFolder(location) : setLibraryLocation(location)}
-      onMove={moveProject} onOrder={orderProject}
+      onMove={moveProject} onOrder={orderProject} onRenameProject={renameProject}
       sidebarWidth={sidebarWidth} onResize={(width) => void resizeProjects(width)}
       onHide={() => void toggleProjects(true)} />
     {folderView && <FolderBrowser location={folderView} brand={brands.find(({ id }) => id === folderView.brandId)?.name ?? "Projects"}

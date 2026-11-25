@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Folder, LibraryBig, PanelLeftClose, PanelRightClose, Plus, Search } from "lucide-react";
-import { useState, type DragEvent } from "react";
+import { ChevronDown, ChevronRight, Folder, LibraryBig, PanelLeftClose, PanelRightClose, Pencil, Plus, Search } from "lucide-react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   studioFolderTrail, studioStages, studioUnassigned,
   type StudioFolder, type StudioLocation, type StudioOrganization, type StudioStage,
@@ -9,10 +9,41 @@ import {
 import { SidebarResize } from "./sidebar-resize";
 
 export const projectSidebarId = "studio-project-navigation";
-export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; tags: string[]; location: StudioLocation; variation: boolean };
+export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; tags: string[]; location: StudioLocation; variation: boolean; locked: boolean };
 export type SidebarBrand = { id: string; name: string; context?: string };
+type RenameTarget = { id: string; kind: "folder" | "project"; name: string };
 const projectMime = "application/x-mahara-studio-project";
 const folderMime = "application/x-mahara-studio-folder";
+
+function RenameEditor({ target, disabled, onSave, onClose }: {
+  target: RenameTarget; disabled: boolean; onSave: (name: string) => Promise<boolean>; onClose: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(target.name);
+  const maxLength = target.kind === "folder" ? 90 : 120;
+  const name = value.trim();
+
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+
+  return <form className="studio-nav-rename" onSubmit={async (event) => {
+    event.preventDefault();
+    if (disabled || !name || name.length > maxLength) return;
+    if (name === target.name || await onSave(name)) onClose();
+  }} onKeyDown={(event) => {
+    if (event.key === "Escape" && !disabled) { event.preventDefault(); onClose(); }
+  }}>
+    <label>{target.kind === "folder" ? "Folder name" : "Project name"}
+      <input ref={input} value={value} maxLength={maxLength} required disabled={disabled} onChange={(event) => setValue(event.target.value)} />
+    </label>
+    <div className="studio-nav-rename-actions">
+      <button type="submit" disabled={disabled || !name || name.length > maxLength}>Save</button>
+      <button type="button" disabled={disabled} onClick={onClose}>Cancel</button>
+    </div>
+  </form>;
+}
 
 export function FolderOptions({ folders, brandId, excluded }: { folders: StudioFolder[]; brandId: string; excluded?: string }) {
   return <><option value="">Brand root</option>{folders.filter((folder) => folder.brandId === brandId &&
@@ -21,13 +52,14 @@ export function FolderOptions({ folders, brandId, excluded }: { folders: StudioF
 }
 
 export function ProjectSidebar({ organization, brands, projects, activeId, openLocation, available, saving, status, cloud, onReload, onSave, onOpen, onFolder,
-  onMove, onOrder, onNew, onAssets, sidebarWidth, onResize, onHide }: {
+  onMove, onOrder, onRenameProject, onNew, onAssets, sidebarWidth, onResize, onHide }: {
   organization: StudioOrganization; brands: SidebarBrand[]; projects: ProjectNavigationEntry[]; activeId?: string;
   openLocation?: StudioLocation;
   available: boolean; saving: boolean; status: string; cloud: boolean; onReload: () => void;
   onSave: (organization: StudioOrganization) => Promise<boolean>; onOpen: (id: string) => void;
   onFolder: (location: StudioLocation) => void;
   onMove: (id: string, location: StudioLocation) => void; onOrder: (id: string, beforeId: string) => void;
+  onRenameProject: (id: string, name: string) => boolean;
   onNew: (location: StudioLocation) => void; onAssets: (location: StudioLocation) => void;
   sidebarWidth: number; onResize: (width: number) => void; onHide: () => void;
 }) {
@@ -47,6 +79,8 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
   const [editingName, setEditingName] = useState("");
   const [editingParent, setEditingParent] = useState("");
   const [dropTarget, setDropTarget] = useState("");
+  const [renaming, setRenaming] = useState<RenameTarget>();
+  const renameTrigger = useRef<HTMLButtonElement>(null);
   const currentProject = projects.find(({ id }) => id === activeId);
   const target = openLocation ?? location ?? currentProject?.location ?? { brandId: studioUnassigned };
   const selectedFolder = organization.folders.find(({ id }) => id === target.folderId);
@@ -68,6 +102,33 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
 
   function moveFolder(id: string, parentId: string | null) {
     return onSave({ ...organization, folders: organization.folders.map((folder) => folder.id === id ? { ...folder, parentId } : folder) });
+  }
+
+  function closeRename() {
+    const trigger = renameTrigger.current;
+    setRenaming(undefined);
+    requestAnimationFrame(() => trigger?.focus());
+  }
+
+  async function saveRename(target: RenameTarget, name: string) {
+    if (target.kind === "project") return onRenameProject(target.id, name);
+    const saved = await onSave({ ...organization, folders: organization.folders.map((folder) => folder.id === target.id ? { ...folder, name } : folder) });
+    if (saved && target.id === selectedFolder?.id) setEditingName(name);
+    return saved;
+  }
+
+  function renameButton(target: RenameTarget, disabled: boolean) {
+    const label = `Rename ${target.kind} ${target.name}`;
+    return <button className="studio-tree-rename" type="button" aria-label={label} title={`Rename ${target.kind}`} disabled={disabled}
+      onClick={(event) => { renameTrigger.current = event.currentTarget; setRenaming(target); }}>
+      <Pencil size={14} aria-hidden />
+    </button>;
+  }
+
+  function renameEditor(id: string, kind: RenameTarget["kind"], disabled: boolean) {
+    if (!renaming || renaming.id !== id || renaming.kind !== kind) return null;
+    return <RenameEditor key={`${kind}:${id}`} target={renaming} disabled={disabled} onClose={closeRename}
+      onSave={(name) => saveRename(renaming, name)} />;
   }
 
   function orderFolder(folder: StudioFolder, offset: number) {
@@ -146,17 +207,21 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
   function renderProjects(destination: StudioLocation) {
     return filtered.filter(({ location }) => location.brandId === destination.brandId && location.folderId === destination.folderId)
       .map((project) => <li key={project.id} className="studio-tree-project">
-        <button type="button" aria-current={activeId === project.id ? "page" : undefined} draggable={available}
-          data-drop={dropTarget === project.id} onDragOver={(event) => allowDrop(event, project.id, false)}
-          onDragLeave={() => setDropTarget("")} onDrop={(event) => {
-            event.preventDefault(); event.stopPropagation(); setDropTarget("");
-            const from = projects.find(({ id }) => id === event.dataTransfer.getData(projectMime));
-            if (from && from.location.brandId === project.location.brandId && from.location.folderId === project.location.folderId) onOrder(from.id, project.id);
-          }} onDragStart={(event) => {
-            event.dataTransfer.setData(projectMime, project.id); event.dataTransfer.effectAllowed = "move";
-          }} onDragEnd={() => setDropTarget("")} onClick={() => { setLocation(project.location); onOpen(project.id); }}>
-          <span>{project.title}</span><small>{[studioStages[project.stage], project.useCase, project.variation ? "Variation" : ""].filter(Boolean).join(" · ")}</small>
-        </button>
+        <div className="studio-tree-project-row">
+          <button className="studio-tree-project-label" type="button" aria-current={activeId === project.id ? "page" : undefined} draggable={available}
+            data-drop={dropTarget === project.id} onDragOver={(event) => allowDrop(event, project.id, false)}
+            onDragLeave={() => setDropTarget("")} onDrop={(event) => {
+              event.preventDefault(); event.stopPropagation(); setDropTarget("");
+              const from = projects.find(({ id }) => id === event.dataTransfer.getData(projectMime));
+              if (from && from.location.brandId === project.location.brandId && from.location.folderId === project.location.folderId) onOrder(from.id, project.id);
+            }} onDragStart={(event) => {
+              event.dataTransfer.setData(projectMime, project.id); event.dataTransfer.effectAllowed = "move";
+            }} onDragEnd={() => setDropTarget("")} onClick={() => { setLocation(project.location); onOpen(project.id); }}>
+            <span>{project.title}</span><small>{[studioStages[project.stage], project.useCase, project.variation ? "Variation" : ""].filter(Boolean).join(" · ")}</small>
+          </button>
+          {renameButton({ id: project.id, kind: "project", name: project.title }, project.locked)}
+        </div>
+        {renameEditor(project.id, "project", project.locked)}
       </li>);
   }
 
@@ -172,10 +237,12 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
             <button type="button" aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`} aria-expanded={open} onClick={() => toggle(folder.id, filterOn)}>
               {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <button type="button" draggable={!locked} onDragStart={(event) => {
+            <button className="studio-tree-label" type="button" draggable={!locked} onDragStart={(event) => {
               event.dataTransfer.setData(folderMime, folder.id); event.dataTransfer.effectAllowed = "move";
             }} onDragEnd={() => setDropTarget("")} onClick={() => openFolder(destination, folder)}><Folder size={14} aria-hidden />{folder.name}</button>
+            {available && renameButton({ id: folder.id, kind: "folder", name: folder.name }, locked)}
           </div>
+          {renameEditor(folder.id, "folder", locked)}
           {open && <ul>{renderFolders(brandId, folder.id)}{renderProjects(destination)}</ul>}
         </li>;
       });
@@ -237,7 +304,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
             <button type="button" aria-label={`${open ? "Collapse" : "Expand"} ${name}`} aria-expanded={open} onClick={() => toggle(id, true)}>
               {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <button type="button" onClick={() => openFolder(destination)}>
+            <button className="studio-tree-label" type="button" onClick={() => openFolder(destination)}>
               {name}<small>{filtered.filter(({ location }) => location.brandId === id).length}</small>
             </button>
           </div>
