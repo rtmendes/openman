@@ -20,11 +20,11 @@ export async function saveStudioWorkspace(userId: string, revision: number, orga
   return data ? { revision: Number(data.revision) } : null;
 }
 
-export async function listStudioBrandAssets(userId: string, location: StudioLocation, page: number, search: string) {
+export async function listStudioBrandAssets(userId: string, location: StudioLocation, page: number, search: string, all = false) {
   const limit = 24;
   const from = (page - 1) * limit;
   let query = db().from("studio_brand_assets").select("media_id,name,type,size").eq("user_id", userId).eq("brand_id", location.brandId);
-  query = location.folderId ? query.eq("folder_id", location.folderId) : query.is("folder_id", null);
+  if (!all) query = location.folderId ? query.eq("folder_id", location.folderId) : query.is("folder_id", null);
   if (search) query = query.ilike("name", `%${search.replace(/[\\%_]/g, "\\$&")}%`);
   const { data, error } = await query.order("created_at", { ascending: false }).order("media_id").range(from, from + limit);
   if (error) fail("list Studio brand assets", error);
@@ -38,4 +38,11 @@ export async function storeStudioBrandAsset(userId: string, location: StudioLoca
     media_id: asset.id, name: asset.name, type: asset.type, size: asset.size,
   }, { onConflict: "user_id,brand_id,media_id" });
   if (error) fail("file Studio brand asset", error);
+}
+
+export async function studioFoldersHaveAssets(userId: string, folderIds: string[]) {
+  if (!folderIds.length) return false;
+  const { data, error } = await db().from("studio_brand_assets").select("media_id").eq("user_id", userId).in("folder_id", folderIds).limit(1);
+  if (error) fail("check Studio folders for assets", error);
+  return Boolean(data?.length);
 }

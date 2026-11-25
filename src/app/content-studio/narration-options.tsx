@@ -93,8 +93,8 @@ export function NarrationOptions({ voice, line, onChange }: {
     onChange({ ...value, style, ...change, language: "en-US" });
   }
 
-  return <details id="studio-narration" className="production-wide production-inputGroup" open>
-    <summary>Narration and voice · {narrationLanguage}</summary>
+  return <details id="studio-narration" className="production-wide production-inputGroup">
+    <summary>Device timing guides · {narrationLanguage}</summary>
     <div className="studio-voice-heading">
       <div><Headphones size={20} aria-hidden /><strong>Hear the delivery</strong></div>
       <p>Compare the same line in eight styles using an English sample voice.</p>

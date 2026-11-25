@@ -9,7 +9,7 @@ import {
 import { SidebarResize } from "./sidebar-resize";
 
 export const projectSidebarId = "studio-project-navigation";
-export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; location: StudioLocation; variation: boolean };
+export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; tags: string[]; location: StudioLocation; variation: boolean };
 export type SidebarBrand = { id: string; name: string; context?: string };
 const projectMime = "application/x-mahara-studio-project";
 const folderMime = "application/x-mahara-studio-folder";
@@ -20,11 +20,13 @@ export function FolderOptions({ folders, brandId, excluded }: { folders: StudioF
     <option key={folder.id} value={folder.id}>{studioFolderTrail(folder.id, folders).map(({ name }) => name).join(" / ")}</option>)}</>;
 }
 
-export function ProjectSidebar({ organization, brands, projects, activeId, available, saving, status, cloud, onReload, onSave, onOpen,
+export function ProjectSidebar({ organization, brands, projects, activeId, openLocation, available, saving, status, cloud, onReload, onSave, onOpen, onFolder,
   onMove, onOrder, onNew, onAssets, sidebarWidth, onResize, onHide }: {
   organization: StudioOrganization; brands: SidebarBrand[]; projects: ProjectNavigationEntry[]; activeId?: string;
+  openLocation?: StudioLocation;
   available: boolean; saving: boolean; status: string; cloud: boolean; onReload: () => void;
   onSave: (organization: StudioOrganization) => Promise<boolean>; onOpen: (id: string) => void;
+  onFolder: (location: StudioLocation) => void;
   onMove: (id: string, location: StudioLocation) => void; onOrder: (id: string, beforeId: string) => void;
   onNew: (location: StudioLocation) => void; onAssets: (location: StudioLocation) => void;
   sidebarWidth: number; onResize: (width: number) => void; onHide: () => void;
@@ -33,26 +35,31 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
   const [stage, setStage] = useState<StudioStage | "">("");
   const [brandFilter, setBrandFilter] = useState("");
   const [useCaseFilter, setUseCaseFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [location, setLocation] = useState<StudioLocation>();
   const [brandName, setBrandName] = useState("");
   const [brandContext, setBrandContext] = useState("");
   const [folderName, setFolderName] = useState("");
-  const [focusedFolder, setFocusedFolder] = useState<string>();
+  const [folderMode, setFolderMode] = useState<"new" | "edit">();
+  const [folderMessage, setFolderMessage] = useState("");
   const [manageBrand, setManageBrand] = useState<string>();
   const [editingName, setEditingName] = useState("");
   const [editingParent, setEditingParent] = useState("");
   const [dropTarget, setDropTarget] = useState("");
   const currentProject = projects.find(({ id }) => id === activeId);
-  const target = location ?? currentProject?.location ?? { brandId: studioUnassigned };
-  const selectedFolder = organization.folders.find(({ id }) => id === focusedFolder);
+  const target = openLocation ?? location ?? currentProject?.location ?? { brandId: studioUnassigned };
+  const selectedFolder = organization.folders.find(({ id }) => id === target.folderId);
   const needle = search.toLocaleLowerCase().trim();
   const useCases = [...new Set(projects.map(({ useCase }) => useCase.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const tags = [...new Map(projects.flatMap((project) => project.tags).map((tag) => [tag.toLocaleLowerCase(), tag])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]));
   const filtered = projects.filter((project) => (!stage || project.stage === stage) &&
     (!brandFilter || project.location.brandId === brandFilter) &&
     (!useCaseFilter || project.useCase.trim() === useCaseFilter) &&
-    (needle ? `${project.title} ${project.useCase} ${studioStages[project.stage]}`.toLocaleLowerCase().includes(needle) : project.stage !== "archived" || stage === "archived"));
-  const filterOn = Boolean(needle || stage || useCaseFilter);
+    (!tagFilter || project.tags.some((tag) => tag.toLocaleLowerCase() === tagFilter)) &&
+    (needle ? `${project.title} ${project.useCase} ${project.tags.join(" ")} ${studioStages[project.stage]}`.toLocaleLowerCase().includes(needle) : project.stage !== "archived" || stage === "archived"));
+  const filterOn = Boolean(needle || stage || useCaseFilter || tagFilter);
   const locked = saving || !available;
 
   function toggle(id: string, fallback: boolean) {
@@ -89,8 +96,32 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
     const folder = { id: crypto.randomUUID(), name: folderName.trim(), brandId: target.brandId, parentId: target.folderId ?? null };
     if (await onSave({ ...organization, folders: [...organization.folders, folder] })) {
       setFolderName("");
-      setLocation({ brandId: folder.brandId, folderId: folder.id });
+      const destination = { brandId: folder.brandId, folderId: folder.id };
+      openFolder(destination, folder);
       setExpanded((current) => ({ ...current, [folder.brandId]: true, [folder.parentId ?? folder.brandId]: true, [folder.id]: true }));
+    }
+  }
+
+  function openFolder(destination: StudioLocation, folder?: StudioFolder) {
+    setLocation(destination);
+    setEditingName(folder?.name ?? "");
+    setEditingParent(folder?.parentId ?? "");
+    setFolderMode(undefined);
+    setFolderMessage("");
+    setExpanded((current) => ({ ...current, [folder?.id ?? destination.brandId]: true }));
+    onFolder(destination);
+  }
+
+  async function deleteFolder(folder: StudioFolder) {
+    if (organization.folders.some(({ parentId }) => parentId === folder.id) ||
+        projects.some(({ location }) => location.folderId === folder.id)) {
+      setFolderMessage("Move the projects and subfolders first, then delete this folder.");
+      return;
+    }
+    if (!window.confirm(`Delete the folder “${folder.name}”?`)) return;
+    if (await onSave({ ...organization, folders: organization.folders.filter(({ id }) => id !== folder.id) })) {
+      const parent = organization.folders.find(({ id }) => id === folder.parentId);
+      openFolder({ brandId: folder.brandId, folderId: parent?.id }, parent);
     }
   }
 
@@ -143,10 +174,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
             </button>
             <button type="button" draggable={!locked} onDragStart={(event) => {
               event.dataTransfer.setData(folderMime, folder.id); event.dataTransfer.effectAllowed = "move";
-            }} onDragEnd={() => setDropTarget("")} onClick={() => {
-              setLocation(destination); setFocusedFolder(folder.id); setEditingName(folder.name); setEditingParent(folder.parentId ?? "");
-              setExpanded((current) => ({ ...current, [folder.id]: true }));
-            }}><Folder size={14} aria-hidden />{folder.name}</button>
+            }} onDragEnd={() => setDropTarget("")} onClick={() => openFolder(destination, folder)}><Folder size={14} aria-hidden />{folder.name}</button>
           </div>
           {open && <ul>{renderFolders(brandId, folder.id)}{renderProjects(destination)}</ul>}
         </li>;
@@ -161,7 +189,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
       </button>
     </header>
     {status && <p role="status">{status} <button type="button" onClick={onReload}>Reload</button></p>}
-    <label className="studio-project-search"><Search size={15} aria-hidden /><input aria-label="Search projects" value={search} placeholder="Title, use case or stage" onChange={(event) => setSearch(event.target.value)} /></label>
+    <label className="studio-project-search"><Search size={15} aria-hidden /><input aria-label="Search projects" value={search} placeholder="Title, tag or use case" onChange={(event) => setSearch(event.target.value)} /></label>
     <div className="studio-nav-filters">
       <label>Brand<select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
         <option value="">All brands</option>{brands.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
@@ -170,10 +198,34 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
     </div>
     {useCases.length > 0 && <label>Use case<select value={useCaseFilter} onChange={(event) => setUseCaseFilter(event.target.value)}>
       <option value="">All use cases</option>{useCases.map((name) => <option key={name}>{name}</option>)}</select></label>}
+    {tags.length > 0 && <label>Tag<select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+      <option value="">All tags</option>{tags.map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>}
     <div className="studio-nav-tools">
       <button type="button" onClick={() => onNew(target)}><Plus size={14} /> New project</button>
+      {available && <button type="button" disabled={locked} onClick={() => { setFolderMode(folderMode === "new" ? undefined : "new"); setFolderMessage(""); }}>New folder</button>}
+      {available && selectedFolder && <button type="button" disabled={locked} onClick={() => {
+        setEditingName(selectedFolder.name); setEditingParent(selectedFolder.parentId ?? ""); setFolderMode(folderMode === "edit" ? undefined : "edit"); setFolderMessage("");
+      }}>Manage folder</button>}
       {cloud && available && <button type="button" onClick={() => onAssets(target)}><LibraryBig size={14} /> Brand assets</button>}
     </div>
+    {folderMode === "new" && <form className="studio-nav-edit" onSubmit={(event) => { event.preventDefault(); void createFolder(); }}>
+      <fieldset disabled={locked}>
+        <label>New folder name<input maxLength={90} value={folderName} onChange={(event) => setFolderName(event.target.value)} /></label>
+        <p className="production-hint">Inside {brands.find(({ id }) => id === target.brandId)?.name}{target.folderId ? ` / ${organization.folders.find(({ id }) => id === target.folderId)?.name}` : ""}</p>
+        <button type="submit" disabled={!folderName.trim()}>Create folder</button>
+      </fieldset>
+    </form>}
+    {folderMode === "edit" && selectedFolder && <fieldset disabled={locked} className="studio-nav-edit">
+      <label>Folder name<input maxLength={90} value={editingName} onChange={(event) => setEditingName(event.target.value)} /></label>
+      <label>Move folder to<select value={editingParent} onChange={(event) => setEditingParent(event.target.value)}>
+        <FolderOptions folders={organization.folders} brandId={selectedFolder.brandId} excluded={selectedFolder.id} /></select></label>
+      <button type="button" disabled={!editingName.trim()} onClick={() => void onSave({ ...organization, folders: organization.folders.map((folder) => folder.id === selectedFolder.id
+        ? { ...folder, name: editingName.trim(), parentId: editingParent || null } : folder) })}>Save folder</button>
+      <button type="button" onClick={() => orderFolder(selectedFolder, -1)}>Move up</button>
+      <button type="button" onClick={() => orderFolder(selectedFolder, 1)}>Move down</button>
+      <button type="button" onClick={() => void deleteFolder(selectedFolder)}>Delete folder</button>
+      {folderMessage && <p role="status">{folderMessage}</p>}
+    </fieldset>}
     <ul className="studio-tree">
       {brands.filter(({ id }) => (!brandFilter || id === brandFilter) &&
         (!filterOn || filtered.some(({ location }) => location.brandId === id))).map(({ id, name }) => {
@@ -185,7 +237,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
             <button type="button" aria-label={`${open ? "Collapse" : "Expand"} ${name}`} aria-expanded={open} onClick={() => toggle(id, true)}>
               {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <button type="button" onClick={() => { setLocation(destination); setFocusedFolder(undefined); setExpanded((current) => ({ ...current, [id]: true })); }}>
+            <button type="button" onClick={() => openFolder(destination)}>
               {name}<small>{filtered.filter(({ location }) => location.brandId === id).length}</small>
             </button>
           </div>
@@ -197,17 +249,6 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
     {available && <details className="studio-nav-settings">
       <summary>Organize workspace</summary>
       <fieldset disabled={locked}>
-        <label>Folder name<input maxLength={90} value={folderName} onChange={(event) => setFolderName(event.target.value)} /></label>
-        <button type="button" disabled={!folderName.trim()} onClick={() => void createFolder()}>Add folder in {brands.find(({ id }) => id === target.brandId)?.name}{target.folderId ? ` / ${organization.folders.find(({ id }) => id === target.folderId)?.name}` : ""}</button>
-        {selectedFolder && <div className="studio-nav-edit">
-          <label>Rename folder<input maxLength={90} value={editingName} onChange={(event) => setEditingName(event.target.value)} /></label>
-          <label>Move folder to<select value={editingParent} onChange={(event) => setEditingParent(event.target.value)}>
-            <FolderOptions folders={organization.folders} brandId={selectedFolder.brandId} excluded={selectedFolder.id} /></select></label>
-          <button type="button" disabled={!editingName.trim()} onClick={() => void onSave({ ...organization, folders: organization.folders.map((folder) => folder.id === selectedFolder.id
-            ? { ...folder, name: editingName.trim(), parentId: editingParent || null } : folder) })}>Save folder</button>
-          <button type="button" onClick={() => orderFolder(selectedFolder, -1)}>Move folder up</button>
-          <button type="button" onClick={() => orderFolder(selectedFolder, 1)}>Move folder down</button>
-        </div>}
         <label>Brand settings<select value={manageBrand ?? ""} onChange={(event) => {
           const item = organization.brands.find(({ id }) => id === event.target.value);
           setManageBrand(item?.id); setBrandName(item?.name ?? ""); setBrandContext(item?.context ?? "");

@@ -51,17 +51,21 @@ async function vendorError(res: Response): Promise<AudioGenError> {
   return new AudioGenError(`ElevenLabs refused the request${said ? `: ${said.slice(0, 200)}` : ` (${res.status})`}.`, res.status === 402 || res.status === 401 ? 402 : 502);
 }
 
-let voiceCache: { at: number; voices: { id: string; name: string; category: string }[] } | null = null;
+type Voice = { id: string; name: string; category: string; description?: string; previewUrl?: string; accent?: string };
+let voiceCache: { at: number; voices: Voice[] } | null = null;
 
 /** The account's voices (premade first), cached for an hour. */
-export async function listVoices(): Promise<{ id: string; name: string; category: string }[]> {
+export async function listVoices(): Promise<Voice[]> {
   if (voiceCache && Date.now() - voiceCache.at < 3_600_000) return voiceCache.voices;
   const key = elevenLabsKey();
   if (!key) throw new AudioGenError("Speech is not set up on this server.", 503);
   const res = await fetch(`${ELEVENLABS_API}/v1/voices`, { headers: { "xi-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw await vendorError(res);
-  const body = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string }[] };
-  const voices = (body.voices ?? []).map((v) => ({ id: v.voice_id, name: v.name, category: v.category ?? "" })).sort((a, b) => Number(b.category === "premade") - Number(a.category === "premade"));
+  const body = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string;
+    description?: string; preview_url?: string; labels?: { accent?: string } }[] };
+  const voices = (body.voices ?? []).map((v) => ({ id: v.voice_id, name: v.name, category: v.category ?? "",
+    description: v.description, previewUrl: v.preview_url, accent: v.labels?.accent }))
+    .sort((a, b) => Number(b.category === "premade") - Number(a.category === "premade"));
   voiceCache = { at: Date.now(), voices };
   return voices;
 }
@@ -76,7 +80,8 @@ async function resolveVoice(voice: string | undefined): Promise<{ id: string; na
 }
 
 /** Text to MP3. Spends `tts_characters` before calling ElevenLabs. */
-export async function synthesizeSpeech(userId: string, text: string, voice?: string): Promise<{ bytes: Uint8Array; voice: string; characters: number }> {
+export async function synthesizeSpeech(userId: string, text: string, voice?: string, settings?: { speed: number }):
+  Promise<{ bytes: Uint8Array; voice: string; characters: number }> {
   const key = elevenLabsKey();
   if (!key) throw new AudioGenError("Speech is not set up on this server.", 503);
   const clean = text.trim();
@@ -87,7 +92,7 @@ export async function synthesizeSpeech(userId: string, text: string, voice?: str
   const res = await fetch(`${ELEVENLABS_API}/v1/text-to-speech/${encodeURIComponent(v.id)}?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
-    body: JSON.stringify({ text: clean, model_id: TTS_MODEL }),
+    body: JSON.stringify({ text: clean, model_id: TTS_MODEL, ...(settings ? { voice_settings: settings } : {}) }),
     cache: "no-store",
     signal: AbortSignal.timeout(120_000),
   });

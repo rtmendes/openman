@@ -10,23 +10,27 @@ import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPla
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
 import { ReferenceInputs } from "./production-inputs";
 import { NarrationOptions } from "./narration-options";
+import { NaturalNarration } from "./natural-narration";
 import { ProjectAgent } from "./project-agent";
 import { StoryWorkflowPanel } from "./story-workflow-panel";
 import { TopicResearch } from "./topic-research";
 import { SubscribrPanel } from "./subscribr-panel";
 import { OfferPlanning } from "./offer-planning";
+import { InitiativeBrief } from "./initiative-brief";
+import { emptyInitiative } from "@/lib/studio/initiative";
 import { savedContentInventory } from "@/lib/studio/campaign-input";
 import type { KeywordBoard } from "@/lib/studio/keyword-research";
 import { storyLabels, storyStyles } from "./story-workflow";
-import type { StoryEdit } from "./story-timeline";
+import { storyImageAssignments, type StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
 import { ProductionViewPanel, ShotBoard, VisualProduction } from "./visual-production";
 import { productionViews, type ProductionView } from "./production-views";
 import { BrandAssetLibrary } from "./brand-asset-library";
 import { FolderOptions, ProjectSidebar, projectSidebarId, type ProjectNavigationEntry, type SidebarBrand } from "./project-sidebar";
+import { FolderBrowser } from "./folder-browser";
 import { useStudioOrganization } from "./use-studio-organization";
-import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectLocation, studioSecondSpring, studioStages, studioUnassigned,
+import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectLocation, studioProjectTags, studioSecondSpring, studioStages, studioUnassigned,
   type StudioLocation, type StudioProjectOrganization, type StudioStage } from "@/lib/studio/organization";
 
 type Item = {
@@ -98,6 +102,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
   const [activity, setActivity] = useState(0);
   const [savedResearch, setSavedResearch] = useState<{ videoId: string; csv?: string }>();
   const [libraryLocation, setLibraryLocation] = useState<StudioLocation>();
+  const [folderView, setFolderView] = useState<StudioLocation>();
   const [sidebarWidthPreview, setSidebarWidthPreview] = useState<number>();
   const [sidebarCollapsedOverride, setSidebarCollapsedOverride] = useState<boolean>();
   const sidebarToggle = useRef<HTMLButtonElement>(null);
@@ -178,8 +183,11 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       const changes = typeof change === "function" ? change(item.spec) : change;
       const spec = { ...item.spec, ...changes };
       if (spec.keyword.trim() !== item.spec.keyword.trim() || spec.brand !== item.spec.brand) spec.activeResearchBriefId = undefined;
-      if (spec.brand.trim().toLowerCase() !== item.spec.brand.trim().toLowerCase()) spec.offer = undefined;
-      if (Object.keys(changes).length === 1 && "media" in changes) {
+      if (spec.brand.trim().toLowerCase() !== item.spec.brand.trim().toLowerCase()) {
+        spec.offer = undefined;
+        spec.initiative = undefined;
+      }
+      if (Object.keys(changes).length === 1 && ("media" in changes || "voice" in changes)) {
         const approved = item.approved ? { ...item.approved, spec } : undefined;
         const storyEdit = item.storyEdit ? { ...item.storyEdit, storyboardApproved: undefined } : undefined;
         return { ...item, spec, approved, storyEdit };
@@ -287,6 +295,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     const copies = source.map((item) => copyDraft(item, keepRender));
     setItems((current) => current.length + copies.length > limit ? current : [...current, ...copies]);
     setProjectId(copies[0].spec.id);
+    setFolderView(undefined);
     setSelectedShot(0);
     setNotice(keepRender ? "Saved revision opened as editable copies." : "Variation added. The original is still in your batch.");
     return true;
@@ -302,7 +311,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     return { ...item, kit, organization: { ...organization, stage: item.organization?.stage === "archived" ? "archived" : undefined },
       approved: undefined, stale: Boolean(item.script.trim()), context: undefined,
       spec: { ...item.spec, brand: brand.id === studioUnassigned ? "" : brand.name, customContext: brand.context ?? "",
-        activeResearchBriefId: undefined, offer: undefined, subscribrWriting: undefined, subscribrSource: undefined } };
+        activeResearchBriefId: undefined, offer: undefined, initiative: undefined, subscribrWriting: undefined, subscribrSource: undefined } };
   }
 
   function addVideo(location: StudioLocation = { brandId: studioUnassigned }) {
@@ -310,6 +319,9 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     const item = blank();
     setItems((rows) => rows.length < limit ? [...rows, applyLocation(item, location)] : rows);
     setProjectId(item.spec.id);
+    setFolderView(undefined);
+    setLibraryLocation(undefined);
+    setView("brief");
     setSelectedShot(0);
   }
 
@@ -317,7 +329,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     if (!run.state.plan || run.phase !== "complete") return;
     const script = JSON.stringify(run.state.plan, null, 2);
     if (copy) {
-      addCopies([{ spec: run.input.spec, kit: run.input.kit, script, variationLabel: run.state.plan.title }], false);
+      addCopies([{ spec: run.input.spec, kit: run.input.kit, script, variationLabel: run.state.plan.title, organization: run.input.organization }], false);
       return;
     }
     if (!matchesStudioSource(run, item, drafts.savedRevision)) return;
@@ -337,7 +349,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       const notes = [`Editorial slot: ${slot.placement} · ${slot.intent}`, `Planned topic: ${slot.topic}`, `Audience question: ${slot.audienceQuestion}`, `First frame: ${creative.firstFrame}`,
         `Thumbnail: ${creative.thumbnail} · ${creative.thumbnailDirection}`, ...creative.assumptions, spec.reference].filter(Boolean).join("\n\n");
       return [{ spec: { ...spec, keyword: slot.topic.length <= 180 ? slot.topic : creative.plan.title, reference: notes.slice(0, 6000), activeResearchBriefId: undefined }, kit,
-        script: JSON.stringify(creative.plan, null, 2), variationLabel: creative.plan.title, campaignCreative: { runId: run.id, intent: creative.intent } }];
+        script: JSON.stringify(creative.plan, null, 2), variationLabel: creative.plan.title, campaignCreative: { runId: run.id, intent: creative.intent },
+        organization: run.input.organization }];
     });
     if (!copies.length) { setNotice("These approved creatives are already in your projects."); return; }
     if (addCopies(copies, false)) setNotice(`${copies.length} approved campaign creatives opened as editable video variations.`);
@@ -349,8 +362,13 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     if (selection.action === "angles" || selection.action === "story-pitches") {
       const direction = ["Creative direction: " + option.text, option.overlay && "Thumbnail text: " + option.overlay,
         option.sourceToCheck && "Source or assumption to check: " + option.sourceToCheck].filter(Boolean).join("\n");
-      if (copy) addCopies([{ spec: { ...run.input.spec, reference: [direction, run.input.spec.reference].filter(Boolean).join("\n\n").slice(0, 6000) },
-        kit: run.input.kit, script: "", variationLabel: option.label }], false);
+      const initiative = { ...(run.input.spec.initiative ?? emptyInitiative), concept: direction };
+      if (copy) addCopies([{ spec: { ...run.input.spec, initiative },
+        kit: run.input.kit, script: "", variationLabel: option.label, organization: run.input.organization }], false);
+      else if (matchesStudioSource(run, item, drafts.savedRevision)) {
+        edit(item.spec.id, { initiative });
+        selectView("script");
+      }
       return;
     }
     if (!copy && !matchesStudioSource(run, item, drafts.savedRevision)) return;
@@ -363,7 +381,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       };
       const script = JSON.stringify(plan, null, 2);
       readVideoPlan(script, run.input.spec.duration);
-      if (copy) addCopies([{ spec: run.input.spec, kit: run.input.kit, script, variationLabel: option.label }], false);
+      if (copy) addCopies([{ spec: run.input.spec, kit: run.input.kit, script, variationLabel: option.label, organization: run.input.organization }], false);
       else writeScript(item.spec.id, script);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The suggestion does not fit this plan.");
@@ -384,7 +402,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
       organization: { ...row.organization, brandId: undefined, folderId: undefined },
       spec: { ...row.spec, brand, customContext: kit === "custom" ? custom?.customContext ?? "" : "", activeResearchBriefId: undefined,
-        offer: row.kit === kit && row.spec.brand === brand ? row.spec.offer : undefined } }));
+        offer: row.kit === kit && row.spec.brand === brand ? row.spec.offer : undefined,
+        initiative: row.kit === kit && row.spec.brand === brand ? row.spec.initiative : undefined } }));
   }
 
   const approved = items.flatMap((item) => !item.approved || completionStage(item) === "archived" || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
@@ -393,6 +412,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
   const activePlan = itemPlan(activeItem);
   const projects: ProjectNavigationEntry[] = items.map((item, index) => ({
     id: item.spec.id, title: projectTitle(item, index), stage: completionStage(item), useCase: item.organization?.useCase ?? "",
+    tags: item.organization?.tags ?? [],
     location: studioProjectLocation(item, workspace.data), variation: Boolean(item.variationOf),
   }));
   const ready = Math.min(studioBatchLimit, items.filter((item) => completionStage(item) !== "archived" && item.spec.keyword.trim() &&
@@ -461,6 +481,19 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     if (workflow && "agentStage" in workflow) onStage(workflow.agentStage);
   }
 
+  function openProject(id: string, campaign = false) {
+    setFolderView(undefined);
+    setLibraryLocation(undefined);
+    setProjectId(id);
+    setSelectedShot(0);
+    selectView(campaign ? "campaign" : "brief");
+  }
+
+  function openFolder(location: StudioLocation) {
+    setLibraryLocation(undefined);
+    setFolderView(location);
+  }
+
   return <section id="video-production" className="content-studio-pipeline production-batch" aria-labelledby="production-heading">
     <div className="content-studio-pipelineHeader">
       <div>
@@ -469,7 +502,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       </div>
     </div>
     <div className="production-actions content-studio-runActions">
-      <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={() => addVideo(activeItem ? studioProjectLocation(activeItem, workspace.data) : undefined)}><Plus size={15} aria-hidden /> Add video</button>
+      <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={() => addVideo(folderView ?? (activeItem ? studioProjectLocation(activeItem, workspace.data) : undefined))}><Plus size={15} aria-hidden /> Add video</button>
       <button type="button" ref={sidebarToggle} aria-controls={projectSidebarId} aria-expanded={!sidebarCollapsed}
         aria-disabled={workspace.saving || workspace.loading} onClick={() => void toggleProjects(!sidebarCollapsed)}>
         <SidebarIcon size={15} aria-hidden /> {sidebarCollapsed ? "Show projects" : "Hide projects"}
@@ -506,7 +539,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     {signedIn && <p className="production-hint">Script generation uses your agent credits.</p>}
     {notice && <p role="alert">{notice}</p>}
     {sidebarCollapsed && workspace.status && <p role="status">{workspace.status}</p>}
-    {libraryLocation && draftKey && workspace.available && <BrandAssetLibrary key={`${libraryLocation.brandId}:${libraryLocation.folderId ?? ""}:${activeId ?? ""}`}
+    {libraryLocation && !folderView && draftKey && workspace.available && <BrandAssetLibrary key={`${libraryLocation.brandId}:${libraryLocation.folderId ?? ""}:${activeId ?? ""}`}
       initial={libraryLocation} brands={brands} folders={workspace.data.folders}
       project={activeItem ? { title: projectTitle(activeItem, items.indexOf(activeItem)), media: activeItem.spec.media ?? [],
         shots: activePlan?.shots.length ?? 0, selectedShot: Math.min(selectedShot, Math.max(0, (activePlan?.shots.length ?? 1) - 1)),
@@ -515,19 +548,25 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     <div className="studio-project-grid studio-organized-grid" data-dock={sidebar.side} data-collapsed={sidebarCollapsed}
       style={{ "--studio-navigation-width": `${sidebarWidth}px` } as CSSProperties}>
     <ProjectSidebar organization={workspace.data} brands={brands} available={workspace.available}
-      saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={activeId}
-      onSave={workspace.save} onReload={workspace.reload} onOpen={(id) => {
-        setProjectId(id); setSelectedShot(0);
-      }} onNew={addVideo} onAssets={setLibraryLocation} onMove={moveProject} onOrder={orderProject}
+      saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={folderView ? undefined : activeId}
+      openLocation={folderView} onSave={workspace.save} onReload={workspace.reload} onOpen={openProject}
+      onFolder={openFolder} onNew={addVideo} onAssets={(location) => folderView ? openFolder(location) : setLibraryLocation(location)}
+      onMove={moveProject} onOrder={orderProject}
       sidebarWidth={sidebarWidth} onResize={(width) => void resizeProjects(width)}
       onHide={() => void toggleProjects(true)} />
-    {items.map((item, index) => {
+    {folderView && <FolderBrowser location={folderView} brand={brands.find(({ id }) => id === folderView.brandId)?.name ?? "Projects"}
+      folders={workspace.data.folders} projects={projects} onFolder={openFolder} onProject={openProject} onNew={() => addVideo(folderView)}>
+      {draftKey && workspace.available && <BrandAssetLibrary key={`${folderView.brandId}:${folderView.folderId ?? ""}`} initial={folderView}
+        brands={brands} folders={workspace.data.folders} onAttach={() => false} />}
+    </FolderBrowser>}
+    {!folderView && items.map((item, index) => {
       const { spec } = item;
       const id = spec.id;
       if (id !== activeId) return null;
       const locked = dispatching || item.pending || uploading[id];
       const previewUrl = previews[id] || (item.renders?.length ? studioMediaUrl(item.renders.at(-1)!.id) : "");
       const plan = activePlan;
+      const storyImages = storyImageAssignments(spec.media ?? [], item.shotReferences, item.storyEdit?.images);
       const location = studioProjectLocation(item, workspace.data);
       const siblings = projects.filter(({ location: entry }) => entry.brandId === location.brandId && entry.folderId === location.folderId);
       const position = siblings.findIndex((entry) => entry.id === id);
@@ -539,7 +578,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
           <h3>{projectTitle(item, index)}</h3>
           <span>{studioStages[completionStage(item)]}</span>
           <button type="button" aria-label={`Create variation of video ${index + 1}`} title="Create variation" disabled={locked || items.length >= limit} onClick={() => { addCopies([item], false); }}><CopyPlus size={15} /></button>
-          <button type="button" aria-label={`Remove video ${index + 1}`} disabled={locked} onClick={() => {
+          <button type="button" aria-label={`Delete ${projectTitle(item, index)}`} title="Delete project" disabled={locked} onClick={() => {
+            if (!window.confirm(`Delete “${projectTitle(item, index)}” from this workspace? You can open it from a saved revision.`)) return;
             clearPreview(id);
             setItems((rows) => rows.filter((row) => row.spec.id !== id));
           }}><X size={15} /></button>
@@ -552,6 +592,11 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
               onChange={(event) => patch(id, (row) => ({ ...row, organization: { ...row.organization, title: event.target.value } }))} /></label>
             <label>Use case<input value={item.organization?.useCase ?? ""} maxLength={80} placeholder="e.g. Paid ad, organic social, tutorial"
               onChange={(event) => patch(id, (row) => ({ ...row, organization: { ...row.organization, useCase: event.target.value } }))} /></label>
+            <label>Tags<input defaultValue={item.organization?.tags?.join(", ") ?? ""} maxLength={480} placeholder="e.g. Deadpan, Launch, 30s"
+              onBlur={(event) => {
+                const tags = studioProjectTags(event.target.value);
+                patch(id, (row) => ({ ...row, organization: { ...row.organization, tags } }));
+              }} /></label>
             <label>Project stage<select value={item.organization?.stage ?? ""} onChange={(event) => {
               const stage = event.target.value as StudioStage | "";
               patch(id, (row) => ({ ...row, organization: { ...row.organization, stage: stage || undefined } }));
@@ -572,8 +617,6 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
-          <OfferPlanning value={spec.offer} inventory={savedContentInventory(item, items)} canDispatch={Boolean(draftKey)}
-            onChange={(offer) => patch(id, (row) => ({ ...row, spec: { ...row.spec, offer } }))} />
           <label>Brand kit<select value={item.kit} onChange={(e) => {
             const value = e.target.value;
             const reuse = items.find(({ spec: other }) => other.id === value);
@@ -619,6 +662,16 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
           </fieldset>
           {item.kit === "custom" && <label className="production-wide">Brand context<textarea rows={2} value={spec.customContext} maxLength={5000} onChange={(e) => edit(id, { customContext: e.target.value })} placeholder="Audience, voice, approved claims and available assets" /></label>}
         </fieldset>
+        <div className="content-studio-runActions"><button type="button" onClick={() => selectView("campaign")}>Open campaign brief</button></div>
+        </ProductionViewPanel>
+        <ProductionViewPanel id="campaign" active={view}>
+          <fieldset disabled={locked} className="production-fields">
+            <legend className="production-visually-hidden">Campaign planning</legend>
+            <InitiativeBrief value={spec.initiative} offer={spec.offer} onChange={(initiative) => edit(id, { initiative })}
+              onImport={(initiative, offer) => edit(id, { initiative, offer })} />
+            <OfferPlanning value={spec.offer} inventory={savedContentInventory(item, items)} canDispatch={Boolean(draftKey)}
+              onChange={(offer) => edit(id, { offer })} />
+          </fieldset>
         </ProductionViewPanel>
         <ProductionViewPanel id="research" active={view}>
           <fieldset className="production-fields" disabled={locked}>
@@ -634,6 +687,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
         </ProductionViewPanel>
         <ProductionViewPanel id="narration" active={view}>
           {view === "narration" && <fieldset className="production-fields" disabled={locked}>
+            <NaturalNarration spec={spec} plan={plan} revision={drafts.savedRevision} cloud={Boolean(draftKey)} stale={item.stale}
+              media={item.storyEdit?.audio} onVoice={(voice) => edit(id, { voice })}
+              onAudio={(audio) => patch(id, (row) => row.script === item.script
+                ? { ...row, storyEdit: { ...row.storyEdit, audio, storyboardApproved: undefined } } : row)} />
             <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
           </fieldset>}
         </ProductionViewPanel>
@@ -647,8 +704,17 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
           {plan && <ShotBoard plan={plan} spec={spec} pinned={{ ...item.storyEdit?.images, ...item.shotReferences }}
             shotIndex={selectedShot} onSelect={setSelectedShot} canSelect={Boolean(draftKey)} locked={Boolean(locked)}
             onPin={(index, assetId) => patch(id, (row) => ({ ...row, shotReferences: { ...row.shotReferences, [index]: assetId } }))} />}
-          {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
-            onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
+          {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={{ ...item.storyEdit, images: storyImages }}
+            onEdit={(storyEdit) => patch(id, (row) => {
+              if (row.approved !== item.approved) return row;
+              const shotReferences = { ...row.shotReferences };
+              const indices = new Set([...Object.keys(storyImages ?? {}), ...Object.keys(storyEdit.images ?? {})]);
+              for (const key of indices) {
+                const index = Number(key);
+                if (storyImages?.[index] !== storyEdit.images?.[index]) shotReferences[index] = storyEdit.images?.[index] ?? "";
+              }
+              return { ...row, shotReferences, storyEdit };
+            })}
             onRender={async (file) => { await previewFile(item, file); selectView("review"); }} cloud={Boolean(draftKey)} />}
           {!plan && <div className="content-studio-runActions"><button type="button" onClick={() => selectView("script")}>Open script and shots</button></div>}
         </ProductionViewPanel>

@@ -112,6 +112,7 @@ export function ProjectAgent({ view, spec, kit, script, plan, shot, onShot, revi
   const researchRun = runs.find(({ state }) => state.outputs.some(({ result }) => result.stage === 1));
   const packagingRun = runs.find(({ state }) => state.packaging || state.outputs.some(({ result }) => result.stage === 2));
   const relevantRun = view === "research" ? runs.find((entry) => entry.input.singleStage === 1) ?? researchRun
+    : view === "campaign" ? runs.find((entry) => entry.input.campaign)
     : view === "packaging" ? runs.find((entry) => entry.input.singleStage === 2) ?? packagingRun
       : view === "script" ? runs.find((entry) => entry.kind === "script" || entry.input.singleStage === 6)
         : view === "narration" ? runs.find((entry) => entry.input.suggestion?.action === "narration")
@@ -141,7 +142,7 @@ export function ProjectAgent({ view, spec, kit, script, plan, shot, onShot, revi
   const frame = chosenFrames(spec).includes(ratio) ? ratio : chosenFrames(spec)[0];
   const image = spec.media?.find(({ type }) => type.startsWith("image/"));
   const suggestions: Record<ProductionView, StudioSuggestion["action"][]> = {
-    brief: ["angles"], research: ["angles"], script: ["hook", "narration"], packaging: ["caption"],
+    brief: ["angles"], campaign: ["angles"], research: ["angles"], script: ["hook", "narration"], packaging: ["caption"],
     narration: ["narration"], shots: ["visual", "caption"], review: ["review", "caption"],
   };
   const showWorkflow = view === "brief" || view === "research" || view === "script" || view === "packaging" || view === "review";
@@ -187,7 +188,7 @@ export function ProjectAgent({ view, spec, kit, script, plan, shot, onShot, revi
       <p className="production-hint">Runs use agent credits.</p>
     </section>}
 
-    {view === "brief" && <section className="studio-assistant-card" aria-labelledby="studio-offer-run-heading">
+    {view === "campaign" && <section className="studio-assistant-card" aria-labelledby="studio-offer-run-heading">
       <h3 id="studio-offer-run-heading">Offer campaign</h3>
       <p>Review the three-piece editorial plan first. The agent drafts and reviews the creatives after you approve it.</p>
       {missing.length > 0 ? <p className="production-hint">Add {missing.join(", ").toLowerCase()} in Offer and editorial planning.</p>
@@ -245,7 +246,9 @@ export function ProjectAgent({ view, spec, kit, script, plan, shot, onShot, revi
           <p>{option.text}</p><small>{option.reason}</small>
           {selected?.action === "story-pitches" && <p>Thumbnail text: {option.overlay} <br />Check before scripting: {option.sourceToCheck}</p>}
           {selected?.action !== "review" && <div className="studio-assistant-actions">
-            {selected?.action !== "angles" && selected?.action !== "story-pitches" && <button type="button" disabled={!matchingDraft} onClick={() => onSuggestion(run, option, false)}>Apply</button>}
+            <button type="button" disabled={!matchingDraft} onClick={() => onSuggestion(run, option, false)}>
+              {selected?.action === "angles" || selected?.action === "story-pitches" ? "Choose for this project" : "Apply"}
+            </button>
             <button type="button" disabled={!canCopy} onClick={() => onSuggestion(run, option, true)}>Save as variation</button>
           </div>}
         </div>)}

@@ -47,6 +47,32 @@ assert.deepEqual(studioFolderTrail(child, workspace.folders).map(({ name }) => n
 assert.deepEqual(studioProjectLocation({ kit: "second-spring", spec: { brand: "Second Spring" }, organization: { folderId: child } }, workspace),
   { brandId: "second-spring", folderId: child });
 console.log("PASS nested Studio folder validation, project location, and legacy brand mapping");
+const { studioProjectTags, studioProjectOrganizationSchema } = require("../src/lib/studio/organization.ts");
+const tags = studioProjectTags("Deadpan, Launch, deadpan, , 30s");
+assert.deepEqual(tags, ["Deadpan", "Launch", "30s"]);
+assert.ok(studioProjectOrganizationSchema.safeParse({ tags }).success);
+assert.equal(studioProjectTags(Array.from({ length: 14 }, (_, index) => `Tag ${index}`).join(",")).length, 12);
+const { emptyInitiative, importOfferFactoryBrief, readOfferFactoryBrief, initiativeContext, initiativeSchema } = require("../src/lib/studio/initiative.ts");
+const offerPacket = { schema: "ofcampaignbriefv1", offerId: "123abcde", briefId: "test-brief-1", revision: 2, status: "review_ready",
+  brief: { goal: "Explain one concrete benefit", buyer: "Someone comparing starter kits",
+    approvedOfferURL: "https://example.com/offer", proof: "Unreviewed quote", creativeAssets: "Private draft", budget: "" },
+  offerContract: { schema: "offerfactory.offer-reference/1", offerId: "123abcde", sourceRevision: "a".repeat(64) } };
+const importedOffer = importOfferFactoryBrief(emptyInitiative, readOfferFactoryBrief(JSON.stringify(offerPacket)), parent);
+assert.ok(initiativeSchema.safeParse(importedOffer).success);
+assert.equal(importedOffer.offerFactory.revision, 2);
+assert.match(initiativeContext(importedOffer), /Someone comparing starter kits/);
+assert.doesNotMatch(initiativeContext(importedOffer), /Unreviewed quote|Private draft/);
+assert.throws(() => readOfferFactoryBrief(JSON.stringify({ ...offerPacket, offerId: "bbbbbbbb" })), /matching offer ID/);
+assert.throws(() => readOfferFactoryBrief(JSON.stringify({ ...offerPacket, brief: { ...offerPacket.brief, approvedOfferURL: "https://example.com/offer?token=abc" } })), /public offer link/);
+assert.throws(() => importOfferFactoryBrief(importedOffer, { ...offerPacket, revision: 1 }, child), /predates/);
+console.log("PASS project tags and bounded, versioned Offer Factory imports");
+const { studioNarrationText, studioVoicePreview } = require("../src/lib/studio/narration.ts");
+assert.equal(studioNarrationText({ shots: [{ narration: "  First line. " }, { narration: "" }, { narration: " Last line." }] }), "First line.\n\nLast line.");
+assert.equal(studioVoicePreview("https://storage.googleapis.com/eleven-public-prod/premade/example.mp3"), "https://storage.googleapis.com/eleven-public-prod/premade/example.mp3");
+assert.equal(studioVoicePreview("https://storage.googleapis.com/private/example.mp3"), undefined);
+assert.equal(studioVoicePreview("https://example.com/sample.mp3"), undefined);
+assert.equal(studioVoicePreview("https://cdn.elevenlabs.io/sample.mp3?token=abc"), undefined);
+console.log("PASS narration text and public voice sample restrictions");
 for (const [index, stage] of stages.entries()) {
   const fields = stageRules[index].fields;
   const handoff = Object.fromEntries(fields.map((name) => [name, "Fixture for " + name]));

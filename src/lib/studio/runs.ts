@@ -5,6 +5,7 @@ import type { Brief } from "@/app/content-studio/workflow";
 import type { VideoPlan, VideoSpec } from "@/app/content-studio/production";
 import type { StudioPackaging } from "./packaging";
 import type { CampaignInput, CampaignState } from "./campaign-workflow";
+import type { StudioProjectOrganization } from "./organization";
 
 export const suggestionActions = {
   angles: "Suggest three distinct creative angles",
@@ -78,6 +79,7 @@ export type StudioRunInput = {
   sourceKey?: string;
   kit: "custom" | "second-spring";
   spec: VideoSpec;
+  organization?: StudioProjectOrganization;
   brief: Brief;
   script: string;
   singleStage?: number;

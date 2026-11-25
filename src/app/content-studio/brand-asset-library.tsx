@@ -11,12 +11,13 @@ import { FolderOptions, type SidebarBrand } from "./project-sidebar";
 export function BrandAssetLibrary({ initial, brands, folders, project, onAttach, onClose }: {
   initial: StudioLocation; brands: SidebarBrand[]; folders: StudioFolder[];
   project?: { title: string; media: StudioMedia[]; shots: number; selectedShot: number; locked: boolean };
-  onAttach: (asset: StudioMedia, shot?: number) => boolean; onClose: () => void;
+  onAttach: (asset: StudioMedia, shot?: number) => boolean; onClose?: () => void;
 }) {
   const [location, setLocation] = useState(initial);
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [all, setAll] = useState(false);
   const [entries, setEntries] = useState<{ assets: StudioMedia[]; hasMore: boolean }>();
   const [preview, setPreview] = useState<StudioMedia>();
   const [asset, setAsset] = useState<StudioMedia>();
@@ -32,16 +33,16 @@ export function BrandAssetLibrary({ initial, brands, folders, project, onAttach,
 
   useEffect(() => {
     let current = true;
-    void getStudioBrandAssets(location, page, search).then((result) => {
+    void getStudioBrandAssets(location, page, search, all).then((result) => {
       if (current) setEntries(result);
     }).catch((error: unknown) => {
       if (current) { setEntries({ assets: [], hasMore: false }); setNote(error instanceof Error ? error.message : "Couldn’t open this brand folder."); }
     });
     return () => { current = false; };
-  }, [location, page, search, refresh]);
+  }, [location, page, search, all, refresh]);
 
   function navigate(destination: StudioLocation) {
-    setLocation(destination); setEntries(undefined); setPage(1); setAsset(undefined); setPreview(undefined); setNote("");
+    setLocation(destination); setEntries(undefined); setPage(1); setAsset(undefined); setPreview(undefined); setNote(""); setAll(false);
   }
 
   async function mutate(action: () => Promise<string>) {
@@ -70,7 +71,7 @@ export function BrandAssetLibrary({ initial, brands, folders, project, onAttach,
 
   return <section className="studio-brand-library" aria-label="Brand asset library">
     <header><h3><LibraryBig size={18} aria-hidden /> Brand assets</h3>
-      <button type="button" onClick={onClose} aria-label="Close brand asset library"><X size={17} /></button>
+      {onClose && <button type="button" onClick={onClose} aria-label="Close brand asset library"><X size={17} /></button>}
     </header>
     <fieldset disabled={pending} className="production-fields">
       <label>Asset brand<select value={location.brandId} onChange={(event) => navigate({ brandId: event.target.value })}>
@@ -79,6 +80,9 @@ export function BrandAssetLibrary({ initial, brands, folders, project, onAttach,
       <label>Asset folder<select value={location.folderId ?? ""} onChange={(event) => navigate({ brandId: location.brandId, folderId: event.target.value || undefined })}>
         <FolderOptions folders={folders} brandId={location.brandId} />
       </select></label>
+      <label><input type="checkbox" checked={all} onChange={(event) => {
+        setAll(event.target.checked); setEntries(undefined); setPage(1); setAsset(undefined); setPreview(undefined);
+      }} /> Browse all files for this brand</label>
       <form className="studio-library-filter" onSubmit={(event) => {
         event.preventDefault(); setPage(1); setSearch(filter.trim()); setRefresh((value) => value + 1);
       }}>
@@ -145,7 +149,7 @@ export function BrandAssetLibrary({ initial, brands, folders, project, onAttach,
       <label>Move asset to folder<select value={targetFolder} onChange={(event) => setTargetFolder(event.target.value)}>
         <FolderOptions folders={folders} brandId={location.brandId} />
       </select></label>
-      <button type="button" disabled={pending || targetFolder === (location.folderId ?? "")} onClick={() => void mutate(async () => {
+      <button type="button" disabled={pending || (!all && targetFolder === (location.folderId ?? ""))} onClick={() => void mutate(async () => {
         await fileStudioBrandAsset({ brandId: location.brandId, folderId: targetFolder || undefined }, asset);
         setAsset(undefined); setPreview(undefined); return "Asset moved. Project references still point to the same file.";
       })}>Move asset</button>

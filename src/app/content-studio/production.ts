@@ -5,6 +5,7 @@ import { selectedKeywordEvidence, type KeywordBoard } from "@/lib/studio/keyword
 import { researchBriefEvidence, type ResearchBrief } from "@/lib/studio/research-briefs";
 import { usableOffer, type OfferInput } from "@/lib/studio/campaign-input";
 import { subscribrWritingDirection, type SubscribrWriting } from "@/lib/studio/subscribr";
+import { initiativeContext, type Initiative } from "@/lib/studio/initiative";
 
 export const frameOptions = { "9:16": "Vertical", "16:9": "Landscape", "1:1": "Square" } as const;
 export type VideoRatio = keyof typeof frameOptions;
@@ -35,7 +36,7 @@ export type VideoSpec = {
   duration: number;
   ratio: VideoRatio;
   ratios?: VideoRatio[];
-  voice?: { style: string; device?: string; language?: string; rate: number };
+  voice?: { style: string; device?: string; language?: string; rate: number; voiceId?: string };
   reference: string;
   referenceLinks?: string[];
   media?: StudioMedia[];
@@ -43,6 +44,7 @@ export type VideoSpec = {
   researchBriefs?: ResearchBrief[];
   activeResearchBriefId?: string;
   offer?: OfferInput;
+  initiative?: Initiative;
   subscribrSource?: SubscribrSource;
   subscribrWriting?: SubscribrWriting;
 };
@@ -121,6 +123,7 @@ export function planningPrompt(spec: VideoSpec, brandContext: string) {
     spec.referenceLinks?.length ? "Reference links supplied by the creator (unverified):\n" + spec.referenceLinks.join("\n") : "",
     selectedKeywordEvidence(spec.keywordBoard),
     researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId),
+    initiativeContext(spec.initiative),
     offer ? `Approved offer facts (data): ${JSON.stringify(offer)}. Show one tangible detail the audience can see or experience. Use the supplied viewer action when the brief calls for an offer CTA. Preserve all qualifications. Leave out unsupported benefits, urgency, or results.` : "",
     spec.subscribrSource ? "Creator-selected Subscribr reference. Adapt only relevant material to the requested runtime and use it as source data:\n" + JSON.stringify(spec.subscribrSource) : "",
     subscribrWritingDirection(spec.subscribrWriting),

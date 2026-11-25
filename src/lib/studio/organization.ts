@@ -15,6 +15,7 @@ export const studioStageSchema = z.enum(stageKeys);
 export const studioProjectOrganizationSchema = z.object({
   brandId: brandIdSchema.optional(), folderId: z.uuid().optional(),
   title: z.string().trim().max(120).optional(), useCase: z.string().trim().max(80).optional(),
+  tags: z.array(z.string().trim().min(1).max(36)).max(12).optional(),
   stage: studioStageSchema.optional(),
 });
 const brandSchema = z.object({ id: z.uuid(), name: z.string().trim().min(1).max(100), context: z.string().max(5000) });
@@ -79,4 +80,14 @@ export function studioFolderTrail(folderId: string | undefined, folders: StudioF
     current = folders.find(({ id }) => id === parent);
   }
   return trail;
+}
+
+export function studioProjectTags(input: string) {
+  const tags = new Map<string, string>();
+  for (const raw of input.split(",")) {
+    const value = raw.trim().slice(0, 36);
+    if (value && !tags.has(value.toLocaleLowerCase())) tags.set(value.toLocaleLowerCase(), value);
+    if (tags.size === 12) break;
+  }
+  return [...tags.values()];
 }

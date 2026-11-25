@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DbError } from "@/lib/db/client";
-import { saveStudioWorkspace, studioWorkspace } from "@/lib/db/studio-workspaces";
+import { saveStudioWorkspace, studioFoldersHaveAssets, studioWorkspace } from "@/lib/db/studio-workspaces";
 import { readJsonLimited } from "@/lib/net/body";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
@@ -26,6 +26,11 @@ export const PUT = withErrorReporting("studio.workspace.save", async (req) => {
   if (process.env.APP_DB_SCHEMA !== "mahara") return Response.json({ error: "Cloud organization is unavailable." }, { status: 404, headers });
   const input = payload.safeParse(await readJsonLimited(req, 900_000).catch(() => null));
   if (!input.success) return Response.json({ error: input.error.issues[0]?.message ?? "Invalid workspace organization." }, { status: 400, headers });
+  const current = await studioWorkspace(userId);
+  if (current.revision !== input.data.revision) return Response.json({ error: "Organization changed in another tab. Reload the latest workspace." }, { status: 409, headers });
+  const next = new Set(input.data.organization.folders.map(({ id }) => id));
+  const removed = current.organization.folders.filter(({ id }) => !next.has(id)).map(({ id }) => id);
+  if (await studioFoldersHaveAssets(userId, removed)) return Response.json({ error: "Move the stored assets before deleting this folder." }, { status: 409, headers });
   const result = await saveStudioWorkspace(userId, input.data.revision, input.data.organization);
   return result ? Response.json(result, { headers })
     : Response.json({ error: "Organization changed in another tab. Reload the latest workspace." }, { status: 409, headers });

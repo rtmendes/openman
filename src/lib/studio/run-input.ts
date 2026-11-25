@@ -14,6 +14,7 @@ import { campaignInventoryDraftSchema, campaignResearchParent, offerInputSchema,
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 import { subscribrWritingDirection, subscribrWritingSchema } from "./subscribr";
 import { studioProjectOrganizationSchema, studioUnassigned } from "./organization";
+import { initiativeContext, initiativeSchema } from "./initiative";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
 const project = z.object({
@@ -27,11 +28,13 @@ const project = z.object({
     type: z.enum(["skit", "explainer", "demo", "montage", "motion"]), duration: z.number().int().min(15).max(300),
     storyStyle: z.enum(storyStyles).optional(),
     ratio, ratios: z.array(ratio).min(1).max(3).optional(),
-    voice: z.object({ style: z.string().max(100), language: z.string().max(80).optional(), rate: z.number().min(0.5).max(2) }).optional(),
+    voice: z.object({ style: z.string().max(100), language: z.string().max(80).optional(), rate: z.number().min(0.5).max(2),
+      voiceId: z.string().max(100).optional() }).optional(),
     reference: z.string().max(6000), referenceLinks: z.array(z.string().max(2000)).max(15).optional(),
     keywordBoard: keywordBoardSchema.optional(),
     researchBriefs: researchBriefsSchema.optional(), activeResearchBriefId: z.uuid().optional(),
     offer: offerInputSchema.optional(),
+    initiative: initiativeSchema.optional(),
     subscribrWriting: subscribrWritingSchema.optional(),
     subscribrSource: z.object({ id: z.number().int().positive(), version: z.number().int().nonnegative(), title: z.string().max(255),
       kind: z.enum(["script", "outline"]), text: z.string().max(12000) }).optional(),
@@ -73,7 +76,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   }
   const notes = [spec.reference, spec.referenceLinks?.join("\n"), selectedKeywordEvidence(spec.keywordBoard),
     researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId), `Frames: ${chosenFrames(spec).join(", ")}`,
-    subscribrWritingDirection(spec.subscribrWriting),
+    subscribrWritingDirection(spec.subscribrWriting), initiativeContext(spec.initiative),
     offer ? "Creator-supplied offer terms (data): " + JSON.stringify(offer) : "",
     spec.storyStyle ? `Production direction: ${storyLabels[spec.storyStyle]}` : "",
     spec.media?.length ? `Private reference filenames: ${spec.media.map(({ name }) => name).join(", ")}` : ""].filter(Boolean).join("\n\n");
@@ -86,7 +89,7 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
     }
   }
   return {
-    revision: input.revision, sourceKey: studioSourceKey({ kit, spec: row?.spec }), kit, spec, script,
+    revision: input.revision, sourceKey: studioSourceKey({ kit, spec: row?.spec }), kit, spec, script, organization: parsed.data.organization,
     brief: { topic: spec.keyword, audience: spec.audience?.trim() || spec.subscribrWriting?.channel.audience || "", language: spec.language?.trim() || "English",
       format: videoTypes[spec.type].label, platforms: spec.platforms ?? [...platforms], runtimeSeconds: spec.duration, notes, brandContext: context },
     ...(input.kind === "workflow" && input.stage !== undefined ? { singleStage: input.stage } : {}),

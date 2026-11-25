@@ -1,5 +1,6 @@
 import { chosenFrames, narrationLanguage, productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
 import { storyWorkflowFiles } from "./story-workflow";
+import { initiativeContext } from "@/lib/studio/initiative";
 
 export const videoDimensions = { "9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080] } as const;
 export type ApprovedVideo = { spec: VideoSpec; plan: VideoPlan; brandContext: string };
@@ -34,6 +35,7 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
     ...(spec.referenceLinks ?? []).map((url) => `- Reference URL: ${url}`),
     ...(spec.media ?? []).map(({ name }) => `- Private material in Content Studio: ${name}`),
     "## Brand Kit", brandContext || "No brand kit supplied.", "",
+    ...(spec.initiative ? ["## Initiative", initiativeContext(spec.initiative), ""] : []),
     "## Shot order and timing",
     ...shots.flatMap(({ start, end, narration, visual, sound, asset, file, overlay, overlayPosition }, i) => [
       "", `### Shot ${i + 1} · ${start}–${end}s`, visual, `- Narration: ${narration || "Silence"}`,
@@ -64,6 +66,21 @@ ${parts}
       "# Video Shotcraft handoff", editorial, "",
       "Use the installed Video Shotcraft skill, shot library and Remotion template for product, motion or transition shots. Choose cards by shot purpose, follow the reference timing and inspect exported frames. Source original or cleared artwork and sound.",
       "Keep the editable Remotion project. Place the selected shot exports at the named asset paths. Avoid using an entire text-only slideshow as footage.",
+    ].join("\n"),
+    "Video-Studio.md": [
+      "# Video Studio v4 brief", "",
+      "Copy this file into the Video Studio v4 repository under briefs/<slug>.md. Run /brief <slug> to prepare a scene plan.",
+      "Review the exact runtime, assets, narration, and cost before starting a render. Bring the private MP4 back to Mahara for review.", "",
+      "## Purpose", spec.initiative?.objective || spec.keyword, "",
+      "## Length target", `${spec.duration} seconds`, "",
+      "## Format", `${spec.ratio} at ${width}×${height}, 30fps`, "",
+      "## Hook", plan.shots[0].narration || plan.shots[0].visual, "",
+      "## Voiceover", spoken.map(({ narration }) => narration).join("\n"), "",
+      "## Beats",
+      ...shots.map(({ start, end, visual, asset, sound, overlay, file }, index) =>
+        `${index + 1}. ${start}–${end}s. ${visual}\n   Overlay: ${overlay}\n   Sound: ${sound}\n   Asset: ${asset} (${file})`),
+      "", "## Project context", `Brand: ${spec.brand || "Unbranded"}`, `Narration: ${narrationLanguage}`, initiativeContext(spec.initiative),
+      "Use the exact voiceover and keep the approved shot timings. Review cleared media and cost before any generation.",
     ].join("\n"),
     "draft-captions.srt": spoken.map(({ start, end, narration }, i) =>
       `${i + 1}\n${stamp(start)} --> ${stamp(end)}\n${narration}\n`,
@@ -114,6 +131,7 @@ export function productionFiles(videos: ApprovedVideo[]): Files {
       "# Content Studio · approved draft projects", "",
       "Each folder contains an approved shot plan, narration script, a HyperFrames composition, draft subtitles and editing handoffs. The MP4 and WAV paths are slots for your cleared footage and timed narration. Provide those files before rendering.", "",
       ...productionTools.map(({ name, role, input, url }) => `- [${name}](${url}) · ${role}. ${input}`), "",
+      "- [Video Studio v4](https://github.com/rtmendes/video-generator) uses the exported Video-Studio.md when preparing a Remotion scene plan.", "",
       ...(variants.some(({ spec }) => spec.storyStyle) ? ["OpenCode projects include OPEN-CODE.md and a project skill. Open each chosen frame folder as a separate project.", ""] : []),
       "Place the named shot clips and one timed voiceover WAV in each assets folder. Keep the voiceover timeline aligned to the shot sheet. Draft subtitles use shot timing and need alignment against the recorded narration. Refine generated text overlays and inspect the hook, action, contrast, caption safe areas, sound and ending before review.", "",
       "Open a project folder and use the HyperFrames CLI to lint, preview, and render draft.mp4. To render a prepared batch with an existing local CLI, run node render-batch.mjs PATH_TO_HYPERFRAMES_CLI_JS from the extracted folder. Each row reports missing media and continues with the next row. Private review only.",

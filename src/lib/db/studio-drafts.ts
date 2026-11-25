@@ -48,13 +48,15 @@ export async function studioMediaInfo(userId: string, id: string, name: string):
   return { id, name, type, size };
 }
 
-export async function saveStudioImage(userId: string, name: string, extension: "png" | "jpg" | "webp" | "gif", image: Uint8Array): Promise<StudioMedia> {
+export async function saveStudioMedia(userId: string, name: string, extension: "png" | "jpg" | "webp" | "gif" | "mp3", bytes: Uint8Array): Promise<StudioMedia> {
   const id = `${randomUUID()}.${extension}`;
   const type = studioMediaTypes[extension];
-  const { error } = await bucket().upload(`${folder(userId)}/${id}`, image, { contentType: type, upsert: false });
-  if (error) fail("store private Studio image", error);
-  return { id, name, type, size: image.byteLength };
+  const { error } = await bucket().upload(`${folder(userId)}/${id}`, bytes, { contentType: type, upsert: false });
+  if (error) fail("store private Studio media", error);
+  return { id, name, type, size: bytes.byteLength };
 }
+
+export const saveStudioImage = saveStudioMedia;
 
 const keywordFile = (videoId: string, id: string, part: "start" | "result") => `keywords-${videoId}-${id}-${part}.json`;
 

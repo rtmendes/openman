@@ -12,6 +12,12 @@ export type StoryEdit = {
   storyboardApproved?: string;
 };
 
+export function storyImageAssignments(media: StudioMedia[], references?: Record<number, string>, prior?: Record<number, string>) {
+  if (!references && !prior) return undefined;
+  const stills = new Set(media.filter(({ type }) => type.startsWith("image/")).map(({ id }) => id));
+  return Object.fromEntries(Object.entries({ ...prior, ...references }).filter(([, id]) => stills.has(id)));
+}
+
 function seconds(stamp: string) {
   const match = /^(\d{2}):([0-5]\d):([0-5]\d)[,.](\d{3})$/.exec(stamp);
   if (!match) throw new Error("Use SRT timestamps such as 00:00:02,500.");

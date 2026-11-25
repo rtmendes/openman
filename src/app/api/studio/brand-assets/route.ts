@@ -11,7 +11,8 @@ import { brandIdSchema, studioSecondSpring, studioUnassigned, type StudioLocatio
 
 const headers = { "Cache-Control": "private, no-store" };
 const location = z.object({ brandId: brandIdSchema, folderId: z.uuid().optional() });
-const listing = location.extend({ page: z.coerce.number().int().min(1).max(5000).default(1), search: z.string().trim().max(90).default("") });
+const listing = location.extend({ page: z.coerce.number().int().min(1).max(5000).default(1),
+  search: z.string().trim().max(90).default(""), all: z.literal("1").optional() });
 const filing = z.discriminatedUnion("action", [
   location.extend({ action: z.literal("file"), id: z.string().regex(studioMediaId), name: z.string().trim().min(1).max(250) }),
   location.extend({ action: z.literal("import-image"), url: z.url().max(1500), name: z.string().trim().max(230).optional() }),
@@ -41,7 +42,7 @@ export const GET = withErrorReporting("studio.brandAssets.list", async (req) => 
   const input = listing.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!input.success) return error("Choose a brand and folder.", 400);
   if (!(await checkLocation(session, input.data))) return error("This brand folder is unavailable.", 404);
-  return Response.json(await listStudioBrandAssets(session.userId, input.data, input.data.page, input.data.search), { headers });
+  return Response.json(await listStudioBrandAssets(session.userId, input.data, input.data.page, input.data.search, input.data.all === "1"), { headers });
 });
 
 export const POST = withErrorReporting("studio.brandAssets.save", async (req) => {

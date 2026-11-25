@@ -7,6 +7,7 @@ import type { ChangeStudioRun, StartStudioRun, StudioRun } from "@/lib/studio/ru
 import type { KeywordLookup } from "@/lib/studio/keyword-research";
 import type { SubscribrChannelContext, SubscribrChannelEntry, SubscribrPage } from "@/lib/studio/subscribr";
 import type { StudioLocation, StudioOrganization } from "@/lib/studio/organization";
+import type { StudioNarrationVoice } from "@/lib/studio/narration";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -35,9 +36,9 @@ async function studioOrganizationRequest<T>(url: string, method = "GET", input?:
 export const getStudioWorkspace = () => studioOrganizationRequest<{ revision: number; organization: StudioOrganization }>("/api/studio/workspace");
 export const saveStudioWorkspace = (revision: number, organization: StudioOrganization) =>
   studioOrganizationRequest<{ revision: number }>("/api/studio/workspace", "PUT", { revision, organization });
-export const getStudioBrandAssets = ({ brandId, folderId }: StudioLocation, page: number, search: string) =>
+export const getStudioBrandAssets = ({ brandId, folderId }: StudioLocation, page: number, search: string, all = false) =>
   studioOrganizationRequest<{ assets: StudioMedia[]; hasMore: boolean }>(`/api/studio/brand-assets?${new URLSearchParams({
-    brandId, ...(folderId ? { folderId } : {}), page: String(page), search,
+    brandId, ...(folderId ? { folderId } : {}), page: String(page), search, ...(all ? { all: "1" } : {}),
   })}`);
 export const fileStudioBrandAsset = (location: StudioLocation, asset: StudioMedia) => studioOrganizationRequest<{ asset: StudioMedia }>(
   "/api/studio/brand-assets", "POST", { ...location, action: "file", id: asset.id, name: asset.name });
@@ -65,6 +66,9 @@ async function studioRunRequest<T>(url: string, method = "GET", body?: StartStud
 
 export const listStudioRuns = (videoId: string) => studioRunRequest<{ runs: StudioRun[] }>(`/api/studio/runs?videoId=${encodeURIComponent(videoId)}`);
 export const startStudioRun = (input: StartStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "POST", input);
+export const listStudioNarrationVoices = () => studioOrganizationRequest<{ configured: boolean; voices: StudioNarrationVoice[] }>("/api/studio/narration");
+export const generateStudioNarration = (id: string, project: string, revision: number) =>
+  studioOrganizationRequest<{ media: StudioMedia }>("/api/studio/narration", "POST", { id, project, revision, confirmCharge: true });
 export const decideStudioRun = (input: ChangeStudioRun) => studioRunRequest<{ run: StudioRun }>("/api/studio/runs", "PATCH", input);
 export type StudioResearchSource = { title: string; description?: string; url: string };
 export const searchStudioTopic = (topic: string) =>
