@@ -1,4 +1,4 @@
-import { chosenFrames, productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
+import { chosenFrames, narrationLanguage, productionTools, videoTypes, type VideoPlan, type VideoSpec } from "./production";
 import { storyWorkflowFiles } from "./story-workflow";
 
 export const videoDimensions = { "9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080] } as const;
@@ -29,7 +29,8 @@ function buildProject({ spec, plan, brandContext }: ApprovedVideo): Files {
   const editorial = [
     `# ${plan.title}`, "", `- Brand: ${spec.brand || "Unbranded"}`, `- Keyword: ${spec.keyword}`,
     `- Format: ${videoTypes[spec.type].label}, ${spec.ratio}, ${spec.duration} seconds`, "",
-    ...(spec.voice ? [`- Narration: ${spec.voice.style} · ${spec.voice.language || "match brief"} · ${spec.voice.rate}×`] : []),
+    `- Narration language: ${narrationLanguage}`,
+    ...(spec.voice ? [`- Delivery: ${spec.voice.style} · ${spec.voice.rate}×`] : []),
     ...(spec.referenceLinks ?? []).map((url) => `- Reference URL: ${url}`),
     ...(spec.media ?? []).map(({ name }) => `- Private material in Content Studio: ${name}`),
     "## Brand Kit", brandContext || "No brand kit supplied.", "",

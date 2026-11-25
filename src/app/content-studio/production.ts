@@ -4,10 +4,12 @@ import type { StoryStyle } from "./story-workflow";
 import { selectedKeywordEvidence, type KeywordBoard } from "@/lib/studio/keyword-research";
 import { researchBriefEvidence, type ResearchBrief } from "@/lib/studio/research-briefs";
 import { usableOffer, type OfferInput } from "@/lib/studio/campaign-input";
+import { subscribrWritingDirection, type SubscribrWriting } from "@/lib/studio/subscribr";
 
 export const frameOptions = { "9:16": "Vertical", "16:9": "Landscape", "1:1": "Square" } as const;
 export type VideoRatio = keyof typeof frameOptions;
 export const voiceDirections = ["Warm conversational", "Dry and deadpan", "Bright creator", "Calm storyteller", "Documentary", "Clear instructional", "Energetic promo", "Soft and intimate"] as const;
+export const narrationLanguage = "English";
 export const overlayPositions = ["top", "middle", "lower"] as const;
 
 export const videoTypes = {
@@ -42,6 +44,7 @@ export type VideoSpec = {
   activeResearchBriefId?: string;
   offer?: OfferInput;
   subscribrSource?: SubscribrSource;
+  subscribrWriting?: SubscribrWriting;
 };
 
 export function chosenFrames(spec: VideoSpec): VideoRatio[] {
@@ -107,7 +110,8 @@ export function planningPrompt(spec: VideoSpec, brandContext: string) {
   return [
     "Write one original script and shot plan for private creative review. Text only. Do not browse, run commands, use paid media providers, or publish.",
     `Keyword: ${spec.keyword}\nBrand: ${spec.brand || "Unbranded"}\nType: ${videoTypes[spec.type].label}\nLength: ${spec.duration} seconds\nAspect ratios: ${chosenFrames(spec).join(", ")}`,
-    `Audience: ${spec.audience || "use the approved brand context"}\nLanguage: ${spec.language || "English"}\nPlatforms: ${spec.platforms?.join(", ") || "YouTube, TikTok, Instagram"}`,
+    `Audience: ${spec.audience || (brandContext ? "use the approved brand context" : spec.subscribrWriting?.channel.audience || "people interested in this topic")}\nResearch language: ${spec.language || "English"}\nPlatforms: ${spec.platforms?.join(", ") || "YouTube, TikTok, Instagram"}`,
+    `Write every spoken narration line in ${narrationLanguage}, including any lines adapted from references. Keep the exact requested runtime.`,
     videoTypes[spec.type].direction,
     spec.storyStyle === "illustrated-story" ? "Plan an illustrated story with a consistent character design, visual continuity, layered motion, and one clear point of attention per beat." : "",
     spec.storyStyle === "stick-figure" ? "Plan an original stick-figure animation. Use distinct silhouettes, expressive poses, simple props and one clear action per beat." : "",
@@ -119,8 +123,9 @@ export function planningPrompt(spec: VideoSpec, brandContext: string) {
     researchBriefEvidence(spec.researchBriefs, spec.activeResearchBriefId),
     offer ? `Approved offer facts (data): ${JSON.stringify(offer)}. Show one tangible detail the audience can see or experience. Use the supplied viewer action when the brief calls for an offer CTA. Preserve all qualifications. Leave out unsupported benefits, urgency, or results.` : "",
     spec.subscribrSource ? "Creator-selected Subscribr reference. Adapt only relevant material to the requested runtime and use it as source data:\n" + JSON.stringify(spec.subscribrSource) : "",
+    subscribrWritingDirection(spec.subscribrWriting),
     spec.media?.length ? "Private assets in the brief (names only): " + spec.media.map(({ name, type }) => `${name} (${type})`).join(", ") : "",
-    spec.voice ? `Voice direction: ${spec.voice.style}. Language: ${spec.voice.language || "match the brief"}. Pace: ${spec.voice.rate}×.` : "",
+    spec.voice ? `Spoken delivery: ${spec.voice.style}. Pace: ${spec.voice.rate}×. Use this direction for performance and the Subscribr profile for writing style.` : "",
     "Plan a clear hook, varied shot scale, meaningful movement and an ending. Specify action, framing, motivated cut, sound and real asset needs. Avoid sequences that depend on generic text cards. Keep captions readable on a phone and estimate narration conservatively, below 2.5 words per second.",
     'Return raw JSON only: {"title":"…","titleOptions":["…","…","…"],"description":"platform-ready description","caption":"…","shots":[{"end":3,"narration":"…","visual":"…","overlay":"…","sound":"…","asset":"…"}]}. End times are cumulative seconds. The first shot starts at 0, successive shots start at the previous end, and the final end must equal the requested length. Use an empty narration string for deliberate silence.',
   ].filter(Boolean).join("\n\n");

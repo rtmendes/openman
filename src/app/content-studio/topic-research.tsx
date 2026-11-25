@@ -18,7 +18,7 @@ export function TopicResearch({ videoId, keyword, language, signedIn, savedLinks
   const [error, setError] = useState("");
   const topic = (override ?? (board.seed || keyword)).trim();
   const encoded = encodeURIComponent(topic);
-  return <details className="production-wide production-inputGroup">
+  return <details id="studio-topic-research" className="production-wide production-inputGroup">
     <summary>Research this topic</summary>
     <ResearchKeywordBoard videoId={videoId} topic={keyword} audience={audience} value={board} onChange={onBoard} dataForSeo={dataForSeo} />
     <ResearchBriefs spec={spec} board={board} audience={audience} youtube={youtube} onChange={onBriefs} />

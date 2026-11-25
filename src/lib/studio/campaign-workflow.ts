@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { chosenFrames, parseVideoPlan, readVideoPlan, type VideoPlan } from "@/app/content-studio/production";
+import { chosenFrames, narrationLanguage, parseVideoPlan, readVideoPlan, type VideoPlan } from "@/app/content-studio/production";
 import { type InventoryEntry, type OfferInput } from "./campaign-input";
 import { researchUrl } from "./keyword-research";
 import { readYouTubeEvidence } from "./youtube-evidence";
+import { subscribrWritingDirection } from "./subscribr";
 import type { StudioRun } from "./runs";
 
 export const offerStages = [
@@ -76,7 +77,7 @@ export function campaignPrompt(run: StudioRun) {
   }
   const context = {
     topic: brief.topic, audience: brief.audience, brand: spec.brand, brandRules: brief.brandContext,
-    language: brief.language, platforms: brief.platforms, runtime: spec.duration, frames: chosenFrames(spec), offer: campaign.offer,
+    editorialLanguage: brief.language, narrationLanguage, platforms: brief.platforms, runtime: spec.duration, frames: chosenFrames(spec), offer: campaign.offer,
     availableAssets: spec.media?.map(({ name, type }) => ({ name, type })) ?? [],
   };
   const shared = [
@@ -98,6 +99,9 @@ export function campaignPrompt(run: StudioRun) {
   if (!progress?.strategy) throw new Error("The editorial plan has not been approved.");
   const plan = `Approved editorial plan (data): ${JSON.stringify(progress.strategy)}`;
   if (stage === 1) return [...shared, plan,
+    "All spoken narration must be in English. Adapt any reference narration to English and retain the approved offer terms and runtime.",
+    ...[subscribrWritingDirection(spec.subscribrWriting),
+      spec.subscribrSource ? `Creator-selected Subscribr source (reference data): ${JSON.stringify(spec.subscribrSource)}` : ""].filter(Boolean),
     "Role: direct-response writer and shooting planner. Return exactly three assets in approved slot order. Give each a different opening image and visual device, such as a reaction, a demonstration, or a payoff insert, chosen for the brief. In the opening show an action or object the intended audience recognizes. Edit on meaningful movement or an information change. For each shot name framing, visible action or insert, overlay, sound and exact footage needed. Give the performer a pause before a punchline when the format calls for one. Write spoken lines for this audience, not filler or boilerplate.",
     `Every plan starts at zero, uses cumulative end seconds, reaches exactly ${spec.duration}s, and fits spoken words below 2.5 words per second where possible. Make thumbnail copy up to 24 characters and specify subject, empty space, contrast, and safe crop for the selected frame. Each plan includes three honest, different titles and a platform-ready description. Each act asset must say or display the supplied action verbatim in its final shot. Label any unproven production assumption. Use only filmable footage or supplied assets. If proof is used, preserve the creator's qualifications and scope.`,
     "Character limits: treatment 95, first frame 240, thumbnail direction 650, working and alternate titles 100 each, caption 400, description 1500, shot visual 450, shot overlay 100, sound 180, asset 250. Include at most eight production assumptions, up to 320 characters each. State the exact checks or assets required without restating the pitch.",

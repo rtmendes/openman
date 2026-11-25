@@ -70,6 +70,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: baseHeaders },
+      { source: "/content-studio", headers: [{ key: "Content-Security-Policy", value: csp.replace("frame-src 'self'", "frame-src 'self' https://www.youtube-nocookie.com") }] },
       // Later entries override earlier ones for the same header: the app itself may use the microphone.
       { source: "/app", headers: [{ key: "Permissions-Policy", value: permissions("(self)") }] },
       { source: "/app/:path*", headers: [{ key: "Permissions-Policy", value: permissions("(self)") }] },

@@ -8,7 +8,8 @@ import type { StudioMedia } from "@/lib/studio/media-types";
 import { matchesStudioSource, type StudioAlternative, type StudioRun } from "@/lib/studio/runs";
 import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
-import { NarrationOptions, ReferenceInputs } from "./production-inputs";
+import { ReferenceInputs } from "./production-inputs";
+import { NarrationOptions } from "./narration-options";
 import { ProjectAgent } from "./project-agent";
 import { StoryWorkflowPanel } from "./story-workflow-panel";
 import { TopicResearch } from "./topic-research";
@@ -20,6 +21,7 @@ import { storyLabels, storyStyles } from "./story-workflow";
 import type { StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
+import { ShotBoard, VisualProduction } from "./visual-production";
 
 type Item = {
   spec: VideoSpec;
@@ -35,6 +37,7 @@ type Item = {
   variationLabel?: string;
   renders?: StudioMedia[];
   storyEdit?: StoryEdit;
+  shotReferences?: Record<number, string>;
   campaignCreative?: { runId: string; intent: string };
 };
 
@@ -136,7 +139,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       const spec = { ...item.spec, ...changes };
       if (spec.keyword.trim() !== item.spec.keyword.trim() || spec.brand !== item.spec.brand) spec.activeResearchBriefId = undefined;
       if (spec.brand.trim().toLowerCase() !== item.spec.brand.trim().toLowerCase()) spec.offer = undefined;
-      if (spec.storyStyle && Object.keys(changes).length === 1 && "media" in changes) {
+      if (Object.keys(changes).length === 1 && "media" in changes) {
         const approved = item.approved ? { ...item.approved, spec } : undefined;
         const storyEdit = item.storyEdit ? { ...item.storyEdit, storyboardApproved: undefined } : undefined;
         return { ...item, spec, approved, storyEdit };
@@ -404,6 +407,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           }}><X size={15} /></button>
         </div>
         <p className="production-hint">{spec.brand || "Unbranded"} · {spec.duration}s · {chosenFrames(spec).join(", ")}</p>
+        <VisualProduction canSeeExamples={canLoadBrand} agent={Boolean(draftKey)} hasPlan={Boolean(plan)}
+          hasPreview={Boolean(item.approved || item.renders?.length)} onStage={onStage} />
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
@@ -441,7 +446,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             {[15, 30, 45, 60, 90, 180, 300].map((seconds) => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : seconds === 90 ? "90 seconds" : `${seconds / 60} min`}</option>)}
           </select></label>
           <label>Audience<input value={spec.audience ?? ""} placeholder={item.kit === "second-spring" ? "Use the brand kit audience" : "Who is this for?"} maxLength={300} onChange={(e) => edit(id, { audience: e.target.value })} /></label>
-          <label>Language<input value={spec.language ?? "English"} maxLength={80} onChange={(e) => edit(id, { language: e.target.value })} /></label>
+          <label>Research language<input value={spec.language ?? "English"} maxLength={80} onChange={(e) => edit(id, { language: e.target.value })} /></label>
           <fieldset className="production-wide production-frames"><legend>Platforms</legend>
             {platforms.map((channel) => {
               const chosen = spec.platforms ?? [...platforms];
@@ -465,12 +470,17 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
         {canLoadBrand && <SubscribrPanel connected={Boolean(providers?.subscribr)} current={spec.subscribrSource}
+          writing={spec.subscribrWriting} locked={Boolean(locked)}
+          onWriting={(subscribrWriting) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrWriting } }))}
           onImport={(subscribrSource) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrSource } }))} />}
         {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
           onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
           onRender={(file) => previewFile(item, file)} cloud={Boolean(draftKey)} />}
         {item.taskId && <Link href={`/app/task/${encodeURIComponent(item.taskId)}`}>Open script task</Link>}
-        {plan && <details className="production-shots" open={!item.approved}>
+        {plan && <ShotBoard plan={plan} spec={spec} pinned={{ ...item.storyEdit?.images, ...item.shotReferences }}
+          shotIndex={selectedShot} onSelect={setSelectedShot} canSelect={Boolean(draftKey)} locked={Boolean(locked)}
+          onPin={(index, assetId) => patch(id, (row) => ({ ...row, shotReferences: { ...row.shotReferences, [index]: assetId } }))} />}
+        {plan && <details className="production-shots">
           <summary>{plan.title} · {plan.shots.length} shots</summary>
           <ol>{plan.shots.map((shot, i) => <li key={i} data-selected={i === selectedShot}>
             <strong>{i ? plan.shots[i - 1].end : 0}–{shot.end}s</strong>
@@ -507,7 +517,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             })}
           </fieldset>
         </details>}
-        <details className="production-edit">
+        <details id="studio-script" className="production-edit">
           <summary>{item.script ? "View or replace script data" : "Import a script and shot plan"}</summary>
           <label>Script JSON<textarea rows={7} value={item.script} maxLength={40000} disabled={locked} placeholder={sampleShape} onChange={(e) => writeScript(id, e.target.value)} /></label>
         </details>
@@ -516,7 +526,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         {item.script.trim() && !item.approved && <div className="content-studio-runActions">
           <button type="button" disabled={locked || item.stale || !spec.keyword.trim()} onClick={() => void approve(item)}>Approve script and shots</button>
         </div>}
-        {(item.approved || item.renders?.length) ? <div className="production-preview">
+        {(item.approved || item.renders?.length) ? <div id="studio-video-preview" className="production-preview">
           {item.approved && <label>{draftKey ? "Save and preview a rendered video" : "Preview a rendered video"}<input type="file" accept="video/mp4,video/webm,.mp4,.webm" disabled={locked} onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void previewFile(item, file);

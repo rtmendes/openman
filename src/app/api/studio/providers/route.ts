@@ -8,7 +8,7 @@ import { logEvent } from "@/lib/observability/log";
 import { withErrorReporting } from "@/lib/observability/route";
 import { requireSession } from "@/lib/session";
 import { keywordBatchSize, keywordMarkets, type KeywordLookup } from "@/lib/studio/keyword-research";
-import { readDataForSeoKeywords, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } from "@/lib/studio/provider-results";
+import { readDataForSeoKeywords, readSubscribrChannelContext, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } from "@/lib/studio/provider-results";
 import { consumeUsage, UsageLimitError } from "@/lib/usage";
 
 const market = z.enum(["US", "GB", "CA", "AU"]);
@@ -22,6 +22,7 @@ const requests = z.discriminatedUnion("action", [
   z.object({ action: z.literal("keyword-sandbox") }),
   z.object({ action: z.literal("keyword-result"), video: z.uuid(), request: z.uuid().optional() }),
   z.object({ action: z.literal("channels"), page, search: z.string().trim().max(180).default("") }),
+  z.object({ action: z.literal("channel-context"), channel: id }),
   z.object({ action: z.literal("scripts"), channel: id, page, search: z.string().trim().max(180).default("") }),
   z.object({ action: z.literal("narration"), script: id }),
 ]);
@@ -106,20 +107,31 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
   const token = subscribrToken();
   if (!token) return reply({ error: "Add a scoped Subscribr token to the server configuration." }, 503);
   const request = input.data;
-  const path = request.action === "channels" ? "/channels" : request.action === "scripts" ? `/channels/${request.channel}/scripts` : `/scripts/${request.script}/content`;
+  const path = request.action === "channels" ? "/channels" : request.action === "channel-context" ? `/channels/${request.channel}`
+    : request.action === "scripts" ? `/channels/${request.channel}/scripts` : `/scripts/${request.script}/content`;
   const url = new URL("/api/v1" + path, subscribr);
   if ("page" in request) {
     url.searchParams.set("page", String(request.page));
-    url.searchParams.set("per_page", "30");
+    url.searchParams.set("per_page", request.action === "channels" ? "100" : "30");
   }
   if ("search" in request && request.search) url.searchParams.set("search", request.search);
   try {
-    const upstream = await providerFetch(url, `Bearer ${token}`);
+    const authorization = `Bearer ${token}`;
+    async function readOptionalChannelInput(relation: "voices" | "templates") {
+      const response = await providerFetch(new URL(`${url.pathname}/${relation}`, subscribr), authorization);
+      return response.ok ? readJsonLimited(response, 800_000) : undefined;
+    }
+    const [upstream, voices, templates] = await Promise.all([
+      providerFetch(url, authorization),
+      request.action === "channel-context" ? readOptionalChannelInput("voices").catch(() => undefined) : undefined,
+      request.action === "channel-context" ? readOptionalChannelInput("templates").catch(() => undefined) : undefined,
+    ]);
     if (upstream.status === 401 || upstream.status === 403) return reply({ error: "Subscribr denied access. Check the token’s channel and script read permissions." }, 502);
     if (upstream.status === 429) return reply({ error: "Subscribr’s request limit was reached. Try again shortly." }, 429);
     if (!upstream.ok) return reply({ error: `Subscribr returned HTTP ${upstream.status}.` }, 502);
     const data = await readJsonLimited(upstream, 800_000);
     if (request.action === "channels") return reply(readSubscribrChannels(data));
+    if (request.action === "channel-context") return reply(readSubscribrChannelContext(data, voices, templates, request.channel));
     if (request.action === "scripts") return reply(readSubscribrScripts(data));
     return reply(readSubscribrNarration(data, request.script));
   } catch (error) {

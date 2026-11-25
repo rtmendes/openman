@@ -5,6 +5,7 @@ import type { AgentEvent, ComputerView, CreateTaskInput, Interaction, TaskAttach
 import type { StudioMedia } from "@/lib/studio/media-types";
 import type { ChangeStudioRun, StartStudioRun, StudioRun } from "@/lib/studio/runs";
 import type { KeywordLookup } from "@/lib/studio/keyword-research";
+import type { SubscribrChannelContext, SubscribrChannelEntry, SubscribrPage } from "@/lib/studio/subscribr";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -50,14 +51,15 @@ export type StudioResearchSource = { title: string; description?: string; url: s
 export const searchStudioTopic = (topic: string) =>
   studioRunRequest<{ sources: StudioResearchSource[] }>(`/api/studio/research?q=${encodeURIComponent(topic)}`);
 export type StudioProviderStatus = { dataForSeo: boolean; subscribr: boolean };
-type SubscribrEntry = { id: number; title: string; hasScript?: boolean; scriptCount?: number };
-type SubscribrPage = { entries: SubscribrEntry[]; page: number; lastPage: number };
+type SubscribrScript = { id: number; title: string; hasScript?: boolean };
 export type SubscribrNarration = { id: number; script: string; outline: string; version: number };
 export const studioProviderStatus = () => studioRunRequest<StudioProviderStatus>("/api/studio/providers?action=status");
 export const listSubscribrChannels = (page = 1, search = "") =>
-  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=channels&page=${page}&search=${encodeURIComponent(search)}`);
+  studioRunRequest<SubscribrPage<SubscribrChannelEntry>>(`/api/studio/providers?action=channels&page=${page}&search=${encodeURIComponent(search)}`);
+export const getSubscribrChannelContext = (channel: number) =>
+  studioRunRequest<SubscribrChannelContext>(`/api/studio/providers?action=channel-context&channel=${channel}`);
 export const listSubscribrScripts = (channel: number, page: number, search: string) =>
-  studioRunRequest<SubscribrPage>(`/api/studio/providers?action=scripts&channel=${channel}&page=${page}&search=${encodeURIComponent(search)}`);
+  studioRunRequest<SubscribrPage<SubscribrScript>>(`/api/studio/providers?action=scripts&channel=${channel}&page=${page}&search=${encodeURIComponent(search)}`);
 export const getSubscribrNarration = (script: number) =>
   studioRunRequest<SubscribrNarration>(`/api/studio/providers?action=narration&script=${script}`);
 export const studioKeywordLookup = (video: string, request?: string) =>

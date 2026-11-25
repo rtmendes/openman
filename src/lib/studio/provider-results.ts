@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { keywordEvidenceSchema, keywordIntent, type KeywordEvidence } from "./keyword-research";
+import type { SubscribrChannelContext } from "./subscribr";
 
 const optionalText = z.string().nullish();
 const number = z.number().nullish();
@@ -54,7 +55,50 @@ export function readSubscribrChannels(value: unknown) {
   const pagination = page.pagination ?? page.meta;
   return { entries: page.data.map(({ id, yt_handle, details, name, title, scripts_count }) => ({
     id, title: z.object({ title: optionalText }).safeParse(details).data?.title || title || name || yt_handle || `Channel ${id}`, scriptCount: scripts_count ?? undefined,
+    handle: yt_handle || undefined,
   })), page: pagination?.current_page ?? 1, lastPage: Math.max(1, pagination?.last_page ?? 1) };
+}
+
+const providerVoice = z.object({ id: providerId, name: z.string(), instructions: optionalText });
+const providerTemplate = z.object({ id: providerId, name: z.string(), description: optionalText });
+const voicesEnvelope = envelope(z.object({ default_voice_id: providerId.nullish(), voices: z.array(z.unknown()) }));
+const templatesEnvelope = envelope(z.object({ default_template_id: providerId.nullish(), templates: z.array(z.unknown()) }));
+const channelEnvelope = envelope(channel.extend({ settings: z.unknown(), voice: z.unknown() }));
+const boundedText = (value: unknown, limit: number) => typeof value === "string" ? value.trim().slice(0, limit) || undefined : undefined;
+
+function voiceEntry(value: unknown) {
+  const entry = providerVoice.safeParse(value);
+  if (!entry.success) return [];
+  const { id, name, instructions } = entry.data;
+  return [{ id, name: boundedText(name, 180) || `Voice ${id}`, instructions: boundedText(instructions, 3000) }];
+}
+
+export function readSubscribrChannelContext(value: unknown, voices: unknown, templates: unknown, id: number): SubscribrChannelContext {
+  const { data } = channelEnvelope.parse(value);
+  if (data.id !== id) throw new Error("Subscribr returned the wrong channel.");
+  const details = z.object({ title: optionalText, description: optionalText, custom_url: optionalText }).safeParse(data.details).data;
+  const settings = z.object({ audience: z.unknown() }).safeParse(data.settings).data;
+  const voiceList = voicesEnvelope.safeParse(voices).data?.data;
+  const templateList = templatesEnvelope.safeParse(templates).data?.data;
+  const defaultVoice = voiceEntry(data.voice)[0];
+  const profiles = (voiceList?.voices ?? []).flatMap(voiceEntry);
+  if (defaultVoice && !profiles.some((entry) => entry.id === defaultVoice.id)) profiles.unshift(defaultVoice);
+  return {
+    channel: {
+      id, title: boundedText(details?.title || data.title || data.name || data.yt_handle, 255) || `Channel ${id}`,
+      handle: boundedText(data.yt_handle || details?.custom_url, 180), audience: boundedText(settings?.audience, 1000),
+      description: boundedText(details?.description, 1500),
+    },
+    voices: profiles, defaultVoiceId: voiceList?.default_voice_id ?? defaultVoice?.id,
+    templates: (templateList?.templates ?? []).flatMap((value) => {
+      const entry = providerTemplate.safeParse(value);
+      if (!entry.success) return [];
+      const { id, name, description } = entry.data;
+      return [{ id, name: boundedText(name, 180) || `Template ${id}`, description: boundedText(description, 1200) }];
+    }),
+    defaultTemplateId: templateList?.default_template_id ?? undefined,
+    unavailable: [...(!voiceList ? ["voices" as const] : []), ...(!templateList ? ["templates" as const] : [])],
+  };
 }
 export function readSubscribrScripts(value: unknown) {
   const page = envelope(z.array(script)).parse(value);

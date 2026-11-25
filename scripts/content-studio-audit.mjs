@@ -188,7 +188,8 @@ assert.match(selectedKeywordEvidence(board), /perimenopause questions/);
 assert.doesNotMatch(selectedKeywordEvidence(board), /remote help/);
 assert.match(suggestedSearches("perimenopause", "relate", "English")[1], /real experiences/);
 assert.deepEqual(suggestedSearches("transición", "answer", "Spanish"), ["transición"]);
-const { readDataForSeoKeywords, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } = require("../src/lib/studio/provider-results.ts");
+const { readDataForSeoKeywords, readSubscribrChannelContext, readSubscribrChannels, readSubscribrNarration, readSubscribrScripts } = require("../src/lib/studio/provider-results.ts");
+const { filterSubscribrChannels, subscribrWritingSchema } = require("../src/lib/studio/subscribr.ts");
 const keywordReport = readDataForSeoKeywords({ status_code: 20000, cost: .01212,
   tasks: [{ status_code: 20000, result: [{ items: [{ keyword: "perimenopause questions", keyword_info: { search_volume: 400 },
     keyword_properties: { keyword_difficulty: null }, search_intent_info: { main_intent: "informational" } }] }] }] }, "US", "en", keyDate);
@@ -200,10 +201,29 @@ assert.equal(readSubscribrScripts({ success: true, data: [{ id: 3, title: "Scrip
 const scriptAsset = { success: true, data: { script_id: 3, script: "Opening!", outline: "", content_version: 1 } };
 assert.equal(readSubscribrNarration(scriptAsset, 3).script, "Opening!");
 assert.throws(() => readSubscribrNarration(scriptAsset, 4));
+const subscribrChannel = { id: 14, yt_handle: "springshow", details: { title: "Café Studio", description: "A short-form channel." },
+  settings: { audience: "Creators", private_other_setting: "Do not import" }, voice: { id: 77, name: "Direct", instructions: "Use short sentences." } };
+const catalog = readSubscribrChannels({ success: true, data: [subscribrChannel], pagination: { current_page: 2, last_page: 2 } });
+assert.equal(catalog.page, 2);
+assert.equal(filterSubscribrChannels(catalog.entries, "cafe @springshow")[0].id, 14);
+assert.deepEqual(filterSubscribrChannels(catalog.entries, "unrelated"), []);
+const writingInputs = readSubscribrChannelContext({ data: subscribrChannel }, { data: { default_voice_id: 77, voices: [subscribrChannel.voice] } },
+  { data: { default_template_id: 21, templates: [{ id: 21, name: "Short Comedy", description: "Setup, escalation, callback." }] } }, 14);
+assert.equal(writingInputs.channel.audience, "Creators");
+assert.doesNotMatch(JSON.stringify(writingInputs), /private_other_setting|Do not import/);
+assert.deepEqual(readSubscribrChannelContext({ data: subscribrChannel }, null, null, 14).unavailable, ["voices", "templates"]);
+assert.throws(() => readSubscribrChannelContext({ data: subscribrChannel }, null, null, 15));
+const subscribrWriting = subscribrWritingSchema.parse({ channel: writingInputs.channel, voice: writingInputs.voices[0], template: writingInputs.templates[0] });
 console.log("PASS provider-specific CSV, relevance and shortlist handoff, DataForSEO response, and Subscribr imports");
 
 const { draftResearchBrief, groupGoogleKeywords, groupSavedVideos, researchBriefEvidence, researchBriefsSchema } = require("../src/lib/studio/research-briefs.ts");
 const { planningPrompt, videoTypes } = require("../src/app/content-studio/production.ts");
+const writingPrompt = planningPrompt({ ...run.input.spec, language: "French", voice: { style: "Dry and deadpan", language: "fr-FR", rate: 1 }, subscribrWriting }, "");
+assert.match(writingPrompt, /every spoken narration line in English/);
+assert.match(writingPrompt, /Use short sentences/);
+assert.match(writingPrompt, /Setup, escalation, callback/);
+assert.doesNotMatch(writingPrompt, /fr-FR/);
+console.log("PASS Subscribr title and handle filtering, bounded writing inputs, and English narration");
 const researchContext = { topic: "Hostage Talks, 2 A.M.", audience: "Women experiencing perimenopause", duration: 30,
   format: videoTypes.skit.label, direction: videoTypes.skit.direction };
 const sharedUrls = "https://www.example.com/a?test=1|https://example.com/b/|https://example.com/c#heading";

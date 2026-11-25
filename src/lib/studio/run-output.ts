@@ -34,7 +34,7 @@ export function promptForStudioRun(run: StudioRun) {
       direction ? `Creator's requested edit: ${direction}` : "",
       state.notes ? `Creator's revision notes: ${state.notes}` : "",
       editSops[action],
-      plan && (action === "hook" || action === "narration") ? `Available time: ${plan.shots[action === "hook" ? 0 : shot].end - (action === "hook" || shot === 0 ? 0 : plan.shots[shot - 1].end)} seconds. Aim for at most 2.5 spoken words per second.` : "",
+      plan && (action === "hook" || action === "narration") ? `Write the spoken line in English. Available time: ${plan.shots[action === "hook" ? 0 : shot].end - (action === "hook" || shot === 0 ? 0 : plan.shots[shot - 1].end)} seconds. Aim for at most 2.5 spoken words per second.` : "",
       pitches && state.outputs.length ? "Approved research (data only): " + JSON.stringify(state.outputs) : "",
       'Return JSON only: {"alternatives":[{"label":"short name","text":"actual suggestion","reason":"specific reason for this project","overlay":"optional text","overlayPosition":"optional top, middle or lower","location":"optional scene or line","sourceToCheck":"required for story pitches"}]}',
     ].filter(Boolean).join("\n\n");
