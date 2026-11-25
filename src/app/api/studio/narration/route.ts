@@ -27,8 +27,8 @@ export const GET = withErrorReporting("studio.narration.voices", async () => {
     const voices = (await listVoices()).map(({ id, name, description, accent, previewUrl }) =>
       ({ id, name, description, accent, previewUrl: studioVoicePreview(previewUrl) }));
     return reply({ configured: true, voices });
-  } catch {
-    return reply({ error: "ElevenLabs could not list the account’s voices. Check its connection and voice permissions." }, 502);
+  } catch (error) {
+    return reply({ error: error instanceof AudioGenError ? error.message : "ElevenLabs could not list the account’s voices. Check the connection and retry." }, 502);
   }
 });
 

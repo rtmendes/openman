@@ -14,7 +14,7 @@
  *
  * Endpoints (https://elevenlabs.io/docs): `POST /v1/text-to-speech/{voice_id}?output_format=mp3_44100_128`
  * `{ text, model_id }`; `POST /v1/sound-generation?output_format=mp3_44100_128` `{ text, duration_seconds?, prompt_influence? }`;
- * `GET /v1/voices` for names. Each answers audio bytes, or JSON `{ detail }` on failure.
+ * `GET /v2/voices` for the account’s voice catalog. Generation answers audio bytes, or JSON `{ detail }` on failure.
  */
 import { ELEVENLABS_API, elevenLabsKey } from "./elevenlabs";
 import { consumeUsage } from "@/lib/usage";
@@ -52,20 +52,54 @@ async function vendorError(res: Response): Promise<AudioGenError> {
 }
 
 type Voice = { id: string; name: string; category: string; description?: string; previewUrl?: string; accent?: string };
+type VoicePage = {
+  voices: { voice_id: string; name: string | null; category?: string; description?: string;
+    preview_url?: string; labels?: { accent?: string } }[];
+  has_more: boolean;
+  next_page_token?: string | null;
+};
 let voiceCache: { at: number; voices: Voice[] } | null = null;
+
+// Use fixed messages so this endpoint never forwards a provider diagnostic containing account data.
+async function voiceCatalogError(res: Response): Promise<AudioGenError> {
+  const body = (await res.json().catch(() => null)) as { detail?: { status?: string } } | null;
+  const reason = body?.detail?.status;
+  if (reason === "missing_permissions") return new AudioGenError("Enable Voices: Read for the ElevenLabs API key.", 502);
+  if (reason === "invalid_api_key" || res.status === 401) {
+    return new AudioGenError("ElevenLabs rejected this API key. Check that the InsightProfit vault entry holds an active key.", 502);
+  }
+  if (res.status === 403) return new AudioGenError("ElevenLabs denied access to voices. Check the key’s voice permissions and IP restrictions.", 502);
+  if (res.status === 429) return new AudioGenError("The ElevenLabs voice catalog is rate limited. Try again shortly.", 502);
+  return new AudioGenError(`ElevenLabs could not list voices (HTTP ${res.status}).`, 502);
+}
 
 /** The account's voices (premade first), cached for an hour. */
 export async function listVoices(): Promise<Voice[]> {
   if (voiceCache && Date.now() - voiceCache.at < 3_600_000) return voiceCache.voices;
   const key = elevenLabsKey();
   if (!key) throw new AudioGenError("Speech is not set up on this server.", 503);
-  const res = await fetch(`${ELEVENLABS_API}/v1/voices`, { headers: { "xi-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw await vendorError(res);
-  const body = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string;
-    description?: string; preview_url?: string; labels?: { accent?: string } }[] };
-  const voices = (body.voices ?? []).map((v) => ({ id: v.voice_id, name: v.name, category: v.category ?? "",
-    description: v.description, previewUrl: v.preview_url, accent: v.labels?.accent }))
-    .sort((a, b) => Number(b.category === "premade") - Number(a.category === "premade"));
+  const url = new URL("/v2/voices", ELEVENLABS_API);
+  url.search = new URLSearchParams({ page_size: "100", include_total_count: "false" }).toString();
+  const signal = AbortSignal.timeout(15_000);
+  const catalog = new Map<string, Voice>();
+  const visited = new Set<string>();
+  for (;;) {
+    const res = await fetch(url, { headers: { "xi-api-key": key }, cache: "no-store", redirect: "error", signal });
+    if (!res.ok) throw await voiceCatalogError(res);
+    const body: VoicePage = await res.json();
+    if (!Array.isArray(body.voices)) throw new AudioGenError("ElevenLabs returned an invalid voice list.", 502);
+    for (const v of body.voices) {
+      if (!v.voice_id || !v.name) continue;
+      catalog.set(v.voice_id, { id: v.voice_id, name: v.name, category: v.category ?? "",
+        description: v.description, previewUrl: v.preview_url, accent: v.labels?.accent });
+    }
+    if (!body.has_more) break;
+    const cursor = body.next_page_token;
+    if (!cursor || visited.has(cursor)) throw new AudioGenError("ElevenLabs could not finish listing the voice catalog.", 502);
+    visited.add(cursor);
+    url.searchParams.set("next_page_token", cursor);
+  }
+  const voices = [...catalog.values()].sort((a, b) => Number(b.category === "premade") - Number(a.category === "premade"));
   voiceCache = { at: Date.now(), voices };
   return voices;
 }
