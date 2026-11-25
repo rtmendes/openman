@@ -6,6 +6,8 @@ import { researchBriefsSchema } from "@/lib/studio/research-briefs";
 import { offerInputSchema } from "@/lib/studio/campaign-input";
 import { studioProjectLimit, studioProjectOrganizationSchema } from "@/lib/studio/organization";
 
+import { facelessSchema } from "@/lib/studio/faceless/integration";
+
 const revision = z.number().int().min(0).max(2_147_483_646);
 const payload = z.object({
   expectedRevision: revision,
@@ -15,6 +17,7 @@ const payload = z.object({
     kit: z.enum(["custom", "second-spring"]),
     script: z.string().max(40000),
     organization: studioProjectOrganizationSchema.optional(),
+    faceless: facelessSchema.optional(),
   }).passthrough()).max(studioProjectLimit),
 });
 const headers = { "Cache-Control": "private, no-store" };
