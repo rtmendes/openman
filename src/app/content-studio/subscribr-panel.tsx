@@ -116,7 +116,10 @@ export function SubscribrPanel({ connected, current, writing, locked, onImport, 
           </div>
           {voice?.instructions && <details><summary>Voice guidelines</summary><p>{voice.instructions}</p></details>}
           {template?.description && <p className="production-hint">{template.description}</p>}
-          {context.unavailable.length > 0 && <p className="production-hint">Subscribr didn’t return {context.unavailable.join(" or ")}. Refresh writing inputs to try again.</p>}
+          {context.unavailable.length > 0 && <p className="production-hint">
+            Subscribr didn’t return {context.unavailable.map((kind) => `${kind}${context.readIssues?.[kind] ? ` (${context.readIssues[kind]})` : ""}`).join(" or ")}.
+            {context.unavailable.includes("voices") && context.voices.length > 0 ? " The channel’s default profile is available." : ""}
+          </p>}
           <div className="content-studio-runActions">
             <button type="button" onClick={() => {
               onWriting({ channel: context.channel, voice, template });

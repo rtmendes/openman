@@ -85,7 +85,7 @@ export function ReferenceInputs({ spec, cloud, onChange }: {
         placeholder="Paste one or more URLs" /></label>
       <button type="button" onClick={() => addLinks(url)}>Add links</button>
     </div>
-    <div className="production-drop" data-dragging={dragging} onDragOver={(event) => {
+    <div className="production-drop" data-dragging={dragging} tabIndex={0} aria-label="Drop files or paste images here" onDragOver={(event) => {
       if (uploading || event.currentTarget.closest("fieldset:disabled")) return;
       event.preventDefault(); setDragging(true);
     }} onDragLeave={() => setDragging(false)} onDrop={(event) => {

@@ -118,20 +118,30 @@ export const GET = withErrorReporting("studio.providers.read", async (req) => {
   try {
     const authorization = `Bearer ${token}`;
     async function readOptionalChannelInput(relation: "voices" | "templates") {
-      const response = await providerFetch(new URL(`${url.pathname}/${relation}`, subscribr), authorization);
-      return response.ok ? readJsonLimited(response, 800_000) : undefined;
+      try {
+        const response = await providerFetch(new URL(`${url.pathname}/${relation}`, subscribr), authorization);
+        if (!response.ok) return { issue: `HTTP ${response.status}` };
+        return { data: await readJsonLimited(response, 800_000) };
+      } catch { return { issue: "unreadable response" }; }
     }
     const [upstream, voices, templates] = await Promise.all([
       providerFetch(url, authorization),
-      request.action === "channel-context" ? readOptionalChannelInput("voices").catch(() => undefined) : undefined,
-      request.action === "channel-context" ? readOptionalChannelInput("templates").catch(() => undefined) : undefined,
+      request.action === "channel-context" ? readOptionalChannelInput("voices") : undefined,
+      request.action === "channel-context" ? readOptionalChannelInput("templates") : undefined,
     ]);
     if (upstream.status === 401 || upstream.status === 403) return reply({ error: "Subscribr denied access. Check the token’s channel and script read permissions." }, 502);
     if (upstream.status === 429) return reply({ error: "Subscribr’s request limit was reached. Try again shortly." }, 429);
     if (!upstream.ok) return reply({ error: `Subscribr returned HTTP ${upstream.status}.` }, 502);
     const data = await readJsonLimited(upstream, 800_000);
     if (request.action === "channels") return reply(readSubscribrChannels(data));
-    if (request.action === "channel-context") return reply(readSubscribrChannelContext(data, voices, templates, request.channel));
+    if (request.action === "channel-context") {
+      const context = readSubscribrChannelContext(data, voices?.data, templates?.data, request.channel);
+      const readIssues = Object.fromEntries(context.unavailable.map((kind) => {
+        const result = kind === "voices" ? voices : templates;
+        return [kind, result?.issue || "unexpected response format"];
+      }));
+      return reply({ ...context, readIssues });
+    }
     if (request.action === "scripts") return reply(readSubscribrScripts(data));
     return reply(readSubscribrNarration(data, request.script));
   } catch (error) {

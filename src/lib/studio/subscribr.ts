@@ -23,6 +23,7 @@ export type SubscribrChannelContext = {
   defaultVoiceId?: number;
   defaultTemplateId?: number;
   unavailable: ("voices" | "templates")[];
+  readIssues?: Partial<Record<"voices" | "templates", string>>;
 };
 
 export function filterSubscribrChannels(entries: SubscribrChannelEntry[], search: string) {
