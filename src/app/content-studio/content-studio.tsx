@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play, Moon, Sun } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clapperboard, Copy, Download, FileText, Film, Image, ListVideo, Search, Settings2, Smartphone, Sparkles, Globe2, Hash, ChevronDown, Play, Moon, Sun, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { stashPrompt } from "@/components/composer/handoff";
 import { APP_HOME } from "@/lib/supabase/config";
 import { getSecondSpringContext } from "@/lib/agent/client";
@@ -37,18 +37,26 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
   const [brandError, setBrandError] = useState("");
   const [showScript, setShowScript] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [workflowCollapsed, setWorkflowCollapsed] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       try {
         const cached = localStorage.getItem("mahara:studio-theme");
         setTheme(cached === "dark" || (!cached && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light");
-      } catch { /* Use the initial theme if settings storage is unavailable. */ }
+        setWorkflowCollapsed(localStorage.getItem("mahara:studio-workflow-collapsed") === "true");
+      } catch { /* Use the initial preferences if browser storage is unavailable. */ }
     });
     return () => cancelAnimationFrame(frame);
   }, []);
   const stage = stages[active];
   const ready = Boolean(brief.topic.trim() && brief.language.trim() && brief.platforms.length);
   const prompt = ready ? makePrompt(brief, active) : "";
+
+  function toggleWorkflow() {
+    const collapsed = !workflowCollapsed;
+    setWorkflowCollapsed(collapsed);
+    try { localStorage.setItem("mahara:studio-workflow-collapsed", String(collapsed)); } catch { /* The toggle works for this visit. */ }
+  }
 
   function update<K extends keyof Brief>(key: K, value: Brief[K]) {
     setBrief((current) => ({ ...current, [key]: value }));
@@ -121,26 +129,35 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
         </nav>
       </header>
 
-      <div className="content-studio-workspace">
+      <div className="content-studio-workspace" data-workflow-collapsed={!draftKey && workflowCollapsed}>
         {!draftKey && <nav className="content-studio-rail" aria-labelledby="workflow-heading">
-          <h2 id="workflow-heading">Workflow</h2>
-          <ol className="content-studio-steps">
-            {stages.map((item, index) => {
-              const Icon = icons[index];
-              return (
-                <li key={item.title}>
-                  <button type="button" aria-current={active === index ? "step" : undefined} onClick={() => selectStep(index)}>
-                    <Icon size={17} aria-hidden />
-                    <span>{item.title}</span>
-                    {active === index && <ArrowRight size={15} aria-hidden />}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-          <select className="content-studio-stepSelect" aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
-            {stages.map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}
-          </select>
+          <div className="content-studio-railHeader">
+            <h2 id="workflow-heading" hidden={workflowCollapsed}>Workflow</h2>
+            <button type="button" className="content-studio-back" aria-controls="studio-workflow-steps" aria-expanded={!workflowCollapsed}
+              aria-label={workflowCollapsed ? "Show workflow" : "Hide workflow"} onClick={toggleWorkflow}>
+              {workflowCollapsed ? <PanelLeftOpen size={15} aria-hidden /> : <PanelLeftClose size={15} aria-hidden />}
+              {workflowCollapsed ? "Show workflow" : "Hide"}
+            </button>
+          </div>
+          <div id="studio-workflow-steps" hidden={workflowCollapsed}>
+            <ol className="content-studio-steps">
+              {stages.map((item, index) => {
+                const Icon = icons[index];
+                return (
+                  <li key={item.title}>
+                    <button type="button" aria-current={active === index ? "step" : undefined} onClick={() => selectStep(index)}>
+                      <Icon size={17} aria-hidden />
+                      <span>{item.title}</span>
+                      {active === index && <ArrowRight size={15} aria-hidden />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <select className="content-studio-stepSelect" aria-labelledby="workflow-heading" value={active} onChange={(event) => selectStep(Number(event.target.value))}>
+              {stages.map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}
+            </select>
+          </div>
         </nav>}
 
         <div className="content-studio-main">
