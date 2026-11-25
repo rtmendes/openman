@@ -66,6 +66,10 @@
 .studio-tree-project-label { display: grid; flex: 1; min-width: 0; gap: 2px; min-height: 34px; padding: 5px 7px; text-align: left; border: 1px solid transparent; border-radius: 6px; overflow-wrap: anywhere; }
 .studio-tree-rename { display: grid; place-items: center; align-self: center; flex: 0 0 26px; min-height: 30px; color: var(--muted); border-radius: 6px; }
 .studio-tree-rename:is(:hover, :focus-visible) { color: var(--accent); background: var(--tint); }
+.studio-tree-menu { z-index: 20; min-width: 145px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: 0 5px 18px #0002; }
+.studio-tree-menu [role="menuitem"] { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 7px; border-radius: 5px; cursor: pointer; outline: none; }
+.studio-tree-menu [data-highlighted] { background: var(--tint); color: var(--accent); }
+.studio-tree-menu [role="separator"] { margin: 3px 0; border-top: 1px solid var(--line); }
 .studio-nav-rename { display: grid; gap: 5px; margin-block: 4px; padding: 5px; border: 1px solid var(--line); border-radius: 6px; }
 .studio-nav-rename-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .studio-nav-rename-actions button { padding: 3px 5px; min-height: 27px; border: 1px solid var(--line); border-radius: 5px; }

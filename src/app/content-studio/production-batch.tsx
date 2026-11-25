@@ -420,9 +420,11 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     (!item.script.trim() || item.stale) && !item.pending && !item.approved).length);
 
   function moveProject(id: string, location: StudioLocation) {
-    if (!workspace.available || !brands.some((brand) => brand.id === location.brandId)) return;
-    if (location.folderId && !workspace.data.folders.some((folder) => folder.id === location.folderId && folder.brandId === location.brandId)) return;
-    patch(id, (item) => item.pending || dispatching || uploading[id] ? item : applyLocation(item, location));
+    const project = projects.find((entry) => entry.id === id);
+    if (!project || project.locked || !workspace.available || !brands.some((brand) => brand.id === location.brandId)) return false;
+    if (location.folderId && !workspace.data.folders.some((folder) => folder.id === location.folderId && folder.brandId === location.brandId)) return false;
+    patch(id, (item) => applyLocation(item, location));
+    return true;
   }
 
   function renameProject(id: string, name: string) {
@@ -432,12 +434,28 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
     return true;
   }
 
-  function orderProject(id: string, beforeId: string) {
-    if (id === beforeId || dispatching) return;
+  function deleteProject(id: string) {
+    const project = projects.find((entry) => entry.id === id);
+    if (!project || project.locked) return;
+    const recovery = draftKey && drafts.versions.length ? " Saved revisions remain in Version history." : "";
+    if (!window.confirm(`Delete “${project.title}” from this workspace?${recovery}`)) return;
+    clearPreview(id);
+    setItems((rows) => rows.filter((row) => row.spec.id !== id));
+  }
+
+  function orderProject(id: string, anchorId: string, position: "before" | "after" = "before") {
+    if (id === anchorId || dispatching) return;
     setItems((rows) => {
       const current = rows.find((row) => row.spec.id === id);
-      if (!current || !rows.some((row) => row.spec.id === beforeId)) return rows;
-      return rows.flatMap((row) => row.spec.id === id ? [] : row.spec.id === beforeId ? [current, row] : [row]);
+      const anchor = rows.find((row) => row.spec.id === anchorId);
+      if (!current || !anchor || current.pending || uploading[id]) return rows;
+      const from = studioProjectLocation(current, workspace.data);
+      const to = studioProjectLocation(anchor, workspace.data);
+      if (from.brandId !== to.brandId || from.folderId !== to.folderId) return rows;
+      const ordered = rows.filter((row) => row.spec.id !== id);
+      const index = ordered.indexOf(anchor) + (position === "after" ? 1 : 0);
+      ordered.splice(index, 0, current);
+      return ordered;
     });
   }
 
@@ -559,7 +577,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
       saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={folderView ? undefined : activeId}
       openLocation={folderView} onSave={workspace.save} onReload={workspace.reload} onOpen={openProject}
       onFolder={openFolder} onNew={addVideo} onAssets={(location) => folderView ? openFolder(location) : setLibraryLocation(location)}
-      onMove={moveProject} onOrder={orderProject} onRenameProject={renameProject}
+      onMove={moveProject} onOrder={orderProject} onRenameProject={renameProject} onDeleteProject={deleteProject}
+      canDeleteFolder={!draftKey || Boolean(drafts.savedRevision) || drafts.status === "ready"}
       sidebarWidth={sidebarWidth} onResize={(width) => void resizeProjects(width)}
       onHide={() => void toggleProjects(true)} />
     {folderView && <FolderBrowser location={folderView} brand={brands.find(({ id }) => id === folderView.brandId)?.name ?? "Projects"}
@@ -586,11 +605,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
           <h3>{projectTitle(item, index)}</h3>
           <span>{studioStages[completionStage(item)]}</span>
           <button type="button" aria-label={`Create variation of video ${index + 1}`} title="Create variation" disabled={locked || items.length >= limit} onClick={() => { addCopies([item], false); }}><CopyPlus size={15} /></button>
-          <button type="button" aria-label={`Delete ${projectTitle(item, index)}`} title="Delete project" disabled={locked} onClick={() => {
-            if (!window.confirm(`Delete “${projectTitle(item, index)}” from this workspace? You can open it from a saved revision.`)) return;
-            clearPreview(id);
-            setItems((rows) => rows.filter((row) => row.spec.id !== id));
-          }}><X size={15} /></button>
+          <button type="button" aria-label={`Delete ${projectTitle(item, index)}`} title="Delete project" disabled={locked} onClick={() => deleteProject(id)}><X size={15} /></button>
         </div>
         <p className="production-hint">{spec.brand || "Unbranded"} · {spec.duration}s · {chosenFrames(spec).join(", ")}</p>
         {workspace.available && <details className="production-inputGroup studio-project-organize">
