@@ -13,7 +13,7 @@ export const projectSidebarId = "studio-project-navigation";
 export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; tags: string[]; location: StudioLocation; variation: boolean; locked: boolean };
 export type SidebarBrand = { id: string; name: string; context?: string };
 type TreeTarget = { id: string; kind: "folder" | "project"; name: string; location: StudioLocation };
-type EditMode = "rename" | "move";
+type EditMode = "rename" | "move" | "delete";
 const projectMime = "application/x-mahara-studio-project";
 const folderMime = "application/x-mahara-studio-folder";
 
@@ -81,15 +81,15 @@ function MoveEditor({ target, brands, folders, disabled, onSave, onClose }: {
   </form>;
 }
 
-function RowActions({ target, portal, disabled, canMove, onEdit, onUp, onDown, onDelete }: {
+function RowActions({ target, portal, disabled, canMove, onEdit, onUp, onDown }: {
   target: TreeTarget; portal: HTMLDivElement | null; disabled: boolean; canMove: boolean;
   onEdit: (mode: EditMode, trigger: HTMLButtonElement | null) => void;
-  onUp?: () => void; onDown?: () => void; onDelete: () => void;
+  onUp?: () => void; onDown?: () => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const openingEditor = useRef(false);
   function edit(mode: EditMode) {
-    openingEditor.current = true;
+    openingEditor.current = mode !== "delete";
     onEdit(mode, trigger.current);
   }
 
@@ -109,7 +109,7 @@ function RowActions({ target, portal, disabled, canMove, onEdit, onUp, onDown, o
         {onUp && <DropdownMenu.Item onSelect={onUp}><ArrowUp size={14} aria-hidden /> Move up</DropdownMenu.Item>}
         {onDown && <DropdownMenu.Item onSelect={onDown}><ArrowDown size={14} aria-hidden /> Move down</DropdownMenu.Item>}
         <DropdownMenu.Separator />
-        <DropdownMenu.Item onSelect={onDelete}><Trash2 size={14} aria-hidden /> Delete {target.kind}</DropdownMenu.Item>
+        <DropdownMenu.Item onSelect={() => edit("delete")}><Trash2 size={14} aria-hidden /> Delete {target.kind}</DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Portal>
   </DropdownMenu.Root>;
@@ -131,7 +131,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
   onMove: (id: string, location: StudioLocation) => boolean;
   onOrder: (id: string, anchorId: string, position?: "before" | "after") => void;
   onRenameProject: (id: string, name: string) => boolean;
-  onDeleteProject: (id: string) => void; canDeleteFolder: boolean;
+  onDeleteProject: (id: string) => boolean; canDeleteFolder: boolean;
   onNew: (location: StudioLocation) => void; onAssets: (location: StudioLocation) => void;
   sidebarWidth: number; onResize: (width: number) => void; onHide: () => void;
 }) {
@@ -192,8 +192,18 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
   }
 
   function beginEdit(mode: EditMode, entry: TreeTarget, trigger: HTMLButtonElement | null) {
-    editTrigger.current = trigger;
     setFolderMessage("");
+    if (mode === "delete" && entry.kind === "folder") {
+      if (organization.folders.some(({ parentId }) => parentId === entry.id) || projects.some(({ location }) => location.folderId === entry.id)) {
+        setFolderMessage("Move the projects and subfolders first, then delete this folder.");
+        return;
+      }
+      if (!canDeleteFolder) {
+        setFolderMessage("Wait for your project changes to finish saving before deleting this folder.");
+        return;
+      }
+    }
+    editTrigger.current = trigger;
     setEditing({ mode, target: entry });
   }
 
@@ -210,6 +220,16 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
 
   function rowEditor(entry: TreeTarget, disabled: boolean) {
     if (editing?.target.id !== entry.id || editing.target.kind !== entry.kind) return null;
+    if (editing.mode === "delete") return <div className="studio-nav-rename" role="group" aria-label={`Confirm deleting ${entry.name}`}>
+      <p className="production-hint">Delete “{entry.name}”?</p>
+      {entry.kind === "project" && cloud && <p className="production-hint">Saved revisions remain in Version history.</p>}
+      <div className="studio-nav-rename-actions">
+        <button type="button" disabled={disabled} onClick={closeEditor}>Cancel</button>
+        <button type="button" disabled={disabled} onClick={async () => {
+          if (entry.kind === "project" ? onDeleteProject(entry.id) : await deleteFolder(entry.id)) closeEditor();
+        }}>Delete</button>
+      </div>
+    </div>;
     if (editing.mode === "move") return <MoveEditor target={entry} brands={brands} folders={organization.folders}
       disabled={disabled || locked} onClose={closeEditor} onSave={(destination) => moveEntry(entry, destination)} />;
     return <RenameEditor target={editing.target} disabled={disabled} onClose={closeEditor} onSave={(name) => saveRename(entry, name)} />;
@@ -252,21 +272,24 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
     onFolder(destination);
   }
 
-  async function deleteFolder(folder: StudioFolder) {
+  async function deleteFolder(id: string) {
+    const folder = organization.folders.find((entry) => entry.id === id);
+    if (!folder) return false;
     if (organization.folders.some(({ parentId }) => parentId === folder.id) ||
         projects.some(({ location }) => location.folderId === folder.id)) {
       setFolderMessage("Move the projects and subfolders first, then delete this folder.");
-      return;
+      return false;
     }
     if (!canDeleteFolder) {
       setFolderMessage("Wait for your project changes to finish saving before deleting this folder.");
-      return;
+      return false;
     }
-    if (!window.confirm(`Delete the folder “${folder.name}”?`)) return;
     if (await onSave({ ...organization, folders: organization.folders.filter(({ id }) => id !== folder.id) })) {
       if (target.folderId === folder.id) openFolder({ brandId: folder.brandId, folderId: folder.parentId ?? undefined });
       setFolderMessage("Folder deleted.");
+      return true;
     }
+    return false;
   }
 
   function allowDrop(event: DragEvent, key: string, allowFolder: boolean) {
@@ -315,8 +338,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
           <RowActions target={entry} portal={menuPortal} disabled={project.locked} canMove={!locked}
             onEdit={(mode, trigger) => beginEdit(mode, entry, trigger)}
             onUp={previous ? () => onOrder(project.id, previous.id) : undefined}
-            onDown={next ? () => onOrder(project.id, next.id, "after") : undefined}
-            onDelete={() => onDeleteProject(project.id)} />
+            onDown={next ? () => onOrder(project.id, next.id, "after") : undefined} />
         </div>
         {rowEditor(entry, project.locked)}
       </li>;
@@ -344,8 +366,7 @@ export function ProjectSidebar({ organization, brands, projects, activeId, openL
             {available && <RowActions target={entry} portal={menuPortal} disabled={locked} canMove
               onEdit={(mode, trigger) => beginEdit(mode, entry, trigger)}
               onUp={previous ? () => orderFolder(folder, previous) : undefined}
-              onDown={next ? () => orderFolder(folder, next) : undefined}
-              onDelete={() => void deleteFolder(folder)} />}
+              onDown={next ? () => orderFolder(folder, next) : undefined} />}
           </div>
           {rowEditor(entry, locked)}
           {open && <ul>{renderFolders(brandId, folder.id)}{renderProjects(destination)}</ul>}

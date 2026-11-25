@@ -436,11 +436,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
 
   function deleteProject(id: string) {
     const project = projects.find((entry) => entry.id === id);
-    if (!project || project.locked) return;
-    const recovery = draftKey && drafts.versions.length ? " Saved revisions remain in Version history." : "";
-    if (!window.confirm(`Delete “${project.title}” from this workspace?${recovery}`)) return;
+    if (!project || project.locked) return false;
     clearPreview(id);
     setItems((rows) => rows.filter((row) => row.spec.id !== id));
+    return true;
   }
 
   function orderProject(id: string, anchorId: string, position: "before" | "after" = "before") {
@@ -605,7 +604,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onSta
           <h3>{projectTitle(item, index)}</h3>
           <span>{studioStages[completionStage(item)]}</span>
           <button type="button" aria-label={`Create variation of video ${index + 1}`} title="Create variation" disabled={locked || items.length >= limit} onClick={() => { addCopies([item], false); }}><CopyPlus size={15} /></button>
-          <button type="button" aria-label={`Delete ${projectTitle(item, index)}`} title="Delete project" disabled={locked} onClick={() => deleteProject(id)}><X size={15} /></button>
+          <button type="button" aria-label={`Delete ${projectTitle(item, index)}`} title="Delete project" disabled={locked} onClick={() => {
+            const recovery = draftKey && drafts.versions.length ? " Saved revisions remain in Version history." : "";
+            if (window.confirm(`Delete “${projectTitle(item, index)}” from this workspace?${recovery}`)) deleteProject(id);
+          }}><X size={15} /></button>
         </div>
         <p className="production-hint">{spec.brand || "Unbranded"} · {spec.duration}s · {chosenFrames(spec).join(", ")}</p>
         {workspace.available && <details className="production-inputGroup studio-project-organize">
