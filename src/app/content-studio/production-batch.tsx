@@ -28,8 +28,15 @@ import { useStudioOrganization } from "./use-studio-organization";
 import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectLocation, studioSecondSpring, studioStages, studioUnassigned,
   type StudioLocation, type StudioProjectOrganization, type StudioStage } from "@/lib/studio/organization";
 
+import { FacelessImport } from "./faceless-import";
+import { FacelessAgents } from "./faceless-agents";
+import { FacelessReverse } from "./faceless-reverse";
+import { appendFaceless, currentFaceless, mapFaceless, type FacelessData } from "@/lib/studio/faceless/integration";
+import { styleBrief } from "@/lib/studio/faceless/reverse";
+
 type Item = {
   spec: VideoSpec;
+  faceless?: FacelessData;
   kit: "custom" | "second-spring";
   script: string;
   approved?: ApprovedVideo;
@@ -82,6 +89,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   const drafts = useStudioDrafts<Item>(draftKey, storageKey + (canLoadBrand ? ":owner" : ":personal"), blank);
   const workspace = useStudioOrganization(Boolean(draftKey));
   const { items, setItems, hydrated } = drafts;
+  const latestItems = useRef(items);
+  useEffect(() => { latestItems.current = items; }, [items]);
   const [dispatching, setDispatching] = useState(false);
   const [notice, setNotice] = useState("");
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -154,6 +163,14 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
 
   function patch(id: string, change: (item: Item) => Item) {
     setItems((rows) => rows.map((item) => item.spec.id === id ? change(item) : item));
+  }
+
+  function saveFaceless(id: string, change: (item: Item) => Item) {
+    const next = latestItems.current.map((item) => item.spec.id === id ? change(item) : item);
+    if (new TextEncoder().encode(JSON.stringify(next)).length > 3_400_000) {
+      throw new Error("The workspace is too large to save this result. Export a backup and reduce its size first.");
+    }
+    setItems(next);
   }
 
   function clearPreview(id: string) {
@@ -470,6 +487,13 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         <button type="button" disabled={!version || versionPending || dispatching} onClick={() => void openVersion()}>Open as copies</button>
       </details>}
     </div>}
+    <FacelessImport items={items} locked={!hydrated || dispatching || drafts.status === "conflict"} onImport={(sources) => {
+      const next = appendFaceless(items, sources);
+      setItems(next);
+      if (next.length > items.length) setProjectId(next[items.length].spec.id);
+      setSelectedShot(0);
+      setNotice(`${next.length - items.length} projects imported. Review their source and media warnings before production.`);
+    }} />
     {canLoadBrand && <p className="production-hint">{brandStatus === "ready" ? `Connected brand kit: ${connected?.name} · Read-only`
       : brandStatus === "checking" ? "Checking connected brand kits…" : "Could not verify the Second Spring kit. Refresh to retry."}</p>}
     {signedIn && <p className="production-hint">Script generation uses your agent credits.</p>}
@@ -599,6 +623,39 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           writing={spec.subscribrWriting} locked={Boolean(locked)}
           onWriting={(subscribrWriting) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrWriting } }))}
           onImport={(subscribrSource) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrSource } }))} />}
+        <FacelessAgents item={item} locked={Boolean(locked) || drafts.status === "conflict"}
+          onSave={(faceless, task) => saveFaceless(id, (row) => {
+            const mapped = task === "channel" ? mapFaceless(faceless, id) : undefined;
+            const nextSpec = mapped ? { ...row.spec, brand: mapped.spec.brand, customContext: mapped.spec.customContext, audience: mapped.spec.audience } : row.spec;
+            faceless.nativeSnapshot = JSON.stringify({ spec: nextSpec, script: row.script });
+            return { ...row, spec: nextSpec, faceless, ...(mapped ? { approved: undefined, stale: Boolean(row.script) } : {}) };
+          })}
+          onUsePlan={() => {
+            if (!item.faceless) return;
+            try {
+              const mapped = mapFaceless({ ...item.faceless, project: { ...item.faceless.project, minutes: spec.duration / 60 } }, id);
+              if (!mapped.script) throw new Error(mapped.faceless?.warnings.join(" ") || "Review the source before using its storyboard.");
+              clearPreview(id);
+              saveFaceless(id, (row) => {
+                const updated = { ...row, script: mapped.script, approved: undefined, storyEdit: undefined, shotReferences: undefined, renders: undefined,
+                  stale: false, error: undefined, faceless: mapped.faceless, organization: { ...row.organization, stage: "review" as const } };
+                if (updated.faceless) updated.faceless.nativeSnapshot = JSON.stringify({ spec: updated.spec, script: updated.script });
+                return updated;
+              });
+              setNotice("Source storyboard opened in the editor. Review its shots, timing and asset assignments before approval.");
+            } catch (error) { setNotice(error instanceof Error ? error.message : "The source storyboard could not be opened."); }
+          }} />
+        <FacelessReverse key={id} report={item.faceless?.project.reverse} comparison={item.faceless?.project.comparison}
+          locked={Boolean(locked) || drafts.status === "conflict"}
+          onSave={(report, comparison) => saveFaceless(id, (row) => {
+            const faceless = currentFaceless(row);
+            faceless.project = { ...faceless.project, [comparison ? "comparison" : "reverse"]: report };
+            const reference = comparison ? row.spec.reference : [row.spec.reference.split("\n\n[Faceless reference evidence]")[0],
+              "[Faceless reference evidence]\n" + styleBrief(report) + "\n" + report.style].join("\n\n").slice(0, 6000);
+            const nextSpec = { ...row.spec, reference };
+            faceless.nativeSnapshot = JSON.stringify({ spec: nextSpec, script: row.script });
+            return { ...row, spec: nextSpec, faceless };
+          })} />
         {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
           onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
           onRender={(file) => previewFile(item, file)} cloud={Boolean(draftKey)} />}
