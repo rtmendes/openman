@@ -117,6 +117,7 @@ export function currentFaceless(item: IntegratedItem): FacelessData {
     results: p?.results ?? [], reverse: p?.reverse, comparison: p?.comparison };
   const channel = { name: item.spec.brand, niche: item.spec.keyword, audience: item.spec.audience ?? "", promise: "", url: "", rules: item.spec.customContext,
     style: "", cta: "", offer: "", setup: {}, ...d?.channel };
+  channel.name = item.spec.brand; channel.audience = item.spec.audience ?? channel.audience; channel.rules = item.spec.customContext;
   return { version: 1, sourceProjectId: d?.sourceProjectId ?? item.spec.id, importedAt: d?.importedAt ?? new Date().toISOString(), project, channel,
     metrics: d?.metrics ?? { subscribers: 0, hours: 0, shorts: 0, uploads: 0, views: 0, rpm: 0, ctr: 0, conversion: 0, price: 0, cost: 0, revenue: 0 },
     instructions: d?.instructions ?? {}, logs: d?.logs ?? [], warnings: d?.warnings ?? [], originalSource: d?.originalSource,
@@ -155,6 +156,15 @@ export function applyAgent(item: IntegratedItem, task: AgentTask, raw: unknown, 
 
 export function exportFaceless(items: IntegratedItem[]) {
   return JSON.stringify({ source: "faceless-director", version: 1, projects: items.flatMap((item) => item.faceless ? [item.faceless] : []) }, null, 2);
+}
+
+export function copyFacelessSource(item: IntegratedItem, spec: VideoSpec): FacelessData | undefined {
+  if (!item.faceless) return;
+  const copy = structuredClone(item.faceless);
+  copy.sourceProjectId = spec.id;
+  copy.project = { ...copy.project, id: spec.id };
+  copy.nativeSnapshot = JSON.stringify({ spec, script: item.script });
+  return copy;
 }
 
 export function asWorkspace(data: FacelessData): SourceWorkspace {

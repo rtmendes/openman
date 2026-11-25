@@ -12,7 +12,7 @@ Module._resolveFilename = function (request, ...options) {
 Module._extensions[".ts"] = (module, filename) => {
   module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, filename);
 };
-const { appendFaceless, readFacelessExport, mapFaceless, currentFaceless, agentPacket, applyAgent, exportFaceless, facelessSchema, sourceToPlan, asWorkspace } = require("../src/lib/studio/faceless/integration.ts");
+const { appendFaceless, copyFacelessSource, readFacelessExport, mapFaceless, currentFaceless, agentPacket, applyAgent, exportFaceless, facelessSchema, sourceToPlan, asWorkspace } = require("../src/lib/studio/faceless/integration.ts");
 const { readVideoPlan } = require("../src/app/content-studio/production.ts");
 const { reverseReportSchema, cutsFromFrames, compareReports } = require("../src/lib/studio/faceless/reverse.ts");
 const channel = { name: "Fixture channel", niche: "Practical systems", audience: "Creators", promise: "One practical action", url: "", rules: "Use original examples.", style: "Simple", cta: "Try one action", offer: "", setup: {} };
@@ -44,6 +44,13 @@ assert.equal(plan.shots.length, 21);
 assert.equal(plan.shots.map((s) => s.narration).join(" "), project.script);
 assert.equal(plan.shots.at(-1).end, 180);
 assert.equal(currentFaceless(item).project.scenes.length, 41);
+const copy = { ...item, spec: { ...item.spec, id: crypto.randomUUID() } };
+copy.faceless = copyFacelessSource(item, copy.spec);
+assert.notEqual(copy.faceless.sourceProjectId, item.faceless.sourceProjectId);
+assert.equal(copy.faceless.originalSource.project.id, project.id);
+assert.equal(currentFaceless(copy).project.scenes.length, 41);
+assert.equal(readFacelessExport(exportFaceless([item, copy])).length, 2);
+assert.equal(item.faceless.project.id, project.id);
 const secondSource = { ...sources[0], sourceProjectId: "second", project: { ...project, id: "second" } };
 assert.equal(appendFaceless([item], sources).length, 1);
 assert.equal(appendFaceless([item], [secondSource]).length, 2);

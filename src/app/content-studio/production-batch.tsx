@@ -31,7 +31,7 @@ import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectL
 import { FacelessImport } from "./faceless-import";
 import { FacelessAgents } from "./faceless-agents";
 import { FacelessReverse } from "./faceless-reverse";
-import { appendFaceless, currentFaceless, mapFaceless, type FacelessData } from "@/lib/studio/faceless/integration";
+import { appendFaceless, copyFacelessSource, currentFaceless, mapFaceless, type FacelessData } from "@/lib/studio/faceless/integration";
 import { styleBrief } from "@/lib/studio/faceless/reverse";
 
 type Item = {
@@ -282,9 +282,11 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     const { spec, kit, script, stale, variationLabel, storyEdit, campaignCreative } = item;
     const organization = item.organization ? { ...item.organization, stage: undefined,
       title: item.organization.title ? `${item.organization.title.slice(0, 107)} · Variation` : undefined } : undefined;
-    return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel, campaignCreative,
+    const copy: Item = { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel, campaignCreative,
       organization, shotReferences: item.shotReferences,
       ...(keepRender ? { renders: item.renders, storyEdit } : {}) };
+    copy.faceless = copyFacelessSource(item, copy.spec);
+    return copy;
   }
 
   function addCopies(source: Item[], keepRender: boolean) {
@@ -593,7 +595,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             {storyStyles.map((style) => <option key={style} value={style}>{storyLabels[style]}</option>)}
           </select></label>
           <label>Runtime<select value={spec.duration} onChange={(e) => edit(id, { duration: Number(e.target.value) })}>
-            {[15, 30, 45, 60, 90, 180, 300].map((seconds) => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : seconds === 90 ? "90 seconds" : `${seconds / 60} min`}</option>)}
+            {[...new Set([15, 30, 45, 60, 90, 180, 300, spec.duration])].sort((a, b) => a - b).map((seconds) => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : seconds === 90 ? "90 seconds" : `${seconds / 60} min`}</option>)}
           </select></label>
           <label>Audience<input value={spec.audience ?? ""} placeholder={item.kit === "second-spring" ? "Use the brand kit audience" : "Who is this for?"} maxLength={300} onChange={(e) => edit(id, { audience: e.target.value })} /></label>
           <label>Research language<input value={spec.language ?? "English"} maxLength={80} onChange={(e) => edit(id, { language: e.target.value })} /></label>
