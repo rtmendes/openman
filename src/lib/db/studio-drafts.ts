@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { db, fail } from "./client";
 import type { KeywordLookup } from "@/lib/studio/keyword-research";
+import { mediaExtension, studioMediaLimit, studioMediaTypes, type StudioMedia } from "@/lib/studio/media-types";
 
 const bucket = () => db().storage.from("mahara-studio-private");
 const folder = (userId: string) => createHash("sha256").update(userId).digest("hex");
@@ -36,6 +37,23 @@ export async function signStudioMedia(userId: string, id: string, download: bool
   const { data, error } = await bucket().createSignedUrl(`${folder(userId)}/${id}`, 900, { download });
   if (error) return null;
   return data.signedUrl;
+}
+
+export async function studioMediaInfo(userId: string, id: string, name: string): Promise<StudioMedia | null> {
+  const { data, error } = await bucket().info(`${folder(userId)}/${id}`);
+  if (error || !data) return null;
+  const type = studioMediaTypes[mediaExtension(id) as keyof typeof studioMediaTypes];
+  const size = Number(data.size ?? data.metadata?.size);
+  if (!type || !Number.isSafeInteger(size) || size <= 0 || size > studioMediaLimit) return null;
+  return { id, name, type, size };
+}
+
+export async function saveStudioImage(userId: string, name: string, extension: "png" | "jpg" | "webp" | "gif", image: Uint8Array): Promise<StudioMedia> {
+  const id = `${randomUUID()}.${extension}`;
+  const type = studioMediaTypes[extension];
+  const { error } = await bucket().upload(`${folder(userId)}/${id}`, image, { contentType: type, upsert: false });
+  if (error) fail("store private Studio image", error);
+  return { id, name, type, size: image.byteLength };
 }
 
 const keywordFile = (videoId: string, id: string, part: "start" | "result") => `keywords-${videoId}-${id}-${part}.json`;

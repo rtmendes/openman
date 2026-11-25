@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { Clapperboard, CopyPlus, Download, Plus, X } from "lucide-react";
+import { Clapperboard, CopyPlus, Download, LibraryBig, PanelLeftOpen, Plus, X } from "lucide-react";
 import { createTask, getSecondSpringContext, getTask, startStudioRun, studioMediaUrl, studioProviderStatus, uploadStudioMedia, type StudioProviderStatus } from "@/lib/agent/client";
-import type { StudioMedia } from "@/lib/studio/media-types";
+import { studioMediaPerProject, type StudioMedia } from "@/lib/studio/media-types";
 import { matchesStudioSource, type StudioAlternative, type StudioRun } from "@/lib/studio/runs";
 import { brandBrief, chosenFrames, frameOptions, overlayPositions, parseVideoPlan, planningPrompt, productionTools, readVideoPlan, videoTypes, type VideoPlan, type VideoRatio, type VideoSpec } from "./production";
 import { productionFiles, productionZip, videoDimensions, type ApprovedVideo } from "./production-package";
@@ -22,6 +22,11 @@ import type { StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
 import { ShotBoard, VisualProduction } from "./visual-production";
+import { BrandAssetLibrary } from "./brand-asset-library";
+import { FolderOptions, ProjectSidebar, type ProjectNavigationEntry, type SidebarBrand } from "./project-sidebar";
+import { useStudioOrganization } from "./use-studio-organization";
+import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectLocation, studioSecondSpring, studioStages, studioUnassigned,
+  type StudioLocation, type StudioProjectOrganization, type StudioStage } from "@/lib/studio/organization";
 
 type Item = {
   spec: VideoSpec;
@@ -39,10 +44,11 @@ type Item = {
   storyEdit?: StoryEdit;
   shotReferences?: Record<number, string>;
   campaignCreative?: { runId: string; intent: string };
+  organization?: StudioProjectOrganization;
 };
 
 const storageKey = "mahara:video-production:v1";
-const limit = 12;
+const limit = studioProjectLimit;
 
 function blank(): Item {
   return { spec: { id: crypto.randomUUID(), keyword: "", brand: "", customContext: "", type: "skit", duration: 30, ratio: "9:16", reference: "" }, kit: "custom", script: "" };
@@ -51,10 +57,30 @@ function blank(): Item {
 const sampleShape = '{"title":"My video","caption":"Social caption","shots":[{"end":5,"narration":"Opening line","visual":"Describe the shot","overlay":"Opening text","sound":"Sound cue","asset":"Footage to record"}]}';
 const blankKeywordBoard: KeywordBoard = { seed: "", objective: "answer", rows: [], shortlist: [] };
 
+function projectTitle(item: Item, index: number) {
+  return item.organization?.title || item.variationLabel || item.spec.keyword.trim() || `Video ${index + 1}`;
+}
+
+function completionStage(item: Item): StudioStage {
+  if (item.organization?.stage) return item.organization.stage;
+  if (item.pending) return "scripting";
+  if (item.stale) return "brief";
+  if (item.renders?.length) return "ready";
+  if (item.approved) return "production";
+  return item.script.trim() ? "review" : "brief";
+}
+
+function itemPlan(item: Item | undefined) {
+  if (item?.approved) return item.approved.plan;
+  if (!item?.script.trim()) return;
+  try { return parseVideoPlan(item.script); } catch { /* The original draft can still be edited. */ }
+}
+
 export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, stage, onStage }: {
   canLoadBrand: boolean; signedIn: boolean; draftKey?: string; onExample?: () => void; stage: number; onStage: (stage: number) => void;
 }) {
   const drafts = useStudioDrafts<Item>(draftKey, storageKey + (canLoadBrand ? ":owner" : ":personal"), blank);
+  const workspace = useStudioOrganization(Boolean(draftKey));
   const { items, setItems, hydrated } = drafts;
   const [dispatching, setDispatching] = useState(false);
   const [notice, setNotice] = useState("");
@@ -69,8 +95,13 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   const [selectedShot, setSelectedShot] = useState(0);
   const [activity, setActivity] = useState(0);
   const [savedResearch, setSavedResearch] = useState<{ videoId: string; csv?: string }>();
+  const [libraryLocation, setLibraryLocation] = useState<StudioLocation>();
   const previewUrls = useRef(new Map<string, string>());
   const dispatchLock = useRef(false);
+  const brands: SidebarBrand[] = [
+    ...(canLoadBrand ? [{ id: studioSecondSpring, name: connected?.name ?? "Second Spring" }] : []),
+    ...workspace.data.brands, { id: studioUnassigned, name: "Unassigned" },
+  ];
 
   useEffect(() => {
     const urls = previewUrls.current;
@@ -149,14 +180,18 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   }
 
   async function contextFor(item: Item, cached?: string) {
-    if (item.kit !== "second-spring") return item.spec.customContext.trim();
+    if (item.kit !== "second-spring") {
+      const brand = workspace.data.brands.find(({ id }) => id === item.organization?.brandId);
+      return (brand?.context ?? item.spec.customContext).trim();
+    }
     if (!canLoadBrand) throw new Error("Sign in as owner to use the connected Second Spring kit.");
     return cached ?? connected?.context ?? brandBrief(await getSecondSpringContext());
   }
 
   async function generateScripts() {
     if (dispatchLock.current) return;
-    const selected = items.filter(({ spec, script, pending, approved, stale }) => spec.keyword.trim() && (!script.trim() || stale) && !pending && !approved);
+    const selected = items.filter((item) => completionStage(item) !== "archived" && item.spec.keyword.trim() &&
+      (!item.script.trim() || item.stale) && !item.pending && !item.approved).slice(0, studioBatchLimit);
     if (!selected.length) return;
     dispatchLock.current = true;
     setDispatching(true);
@@ -228,13 +263,16 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
 
   function copyDraft(item: Item, keepRender: boolean): Item {
     const { spec, kit, script, stale, variationLabel, storyEdit, campaignCreative } = item;
+    const organization = item.organization ? { ...item.organization, stage: undefined,
+      title: item.organization.title ? `${item.organization.title.slice(0, 107)} · Variation` : undefined } : undefined;
     return { spec: { ...spec, id: crypto.randomUUID() }, kit, script, stale, variationOf: item.variationOf ?? spec.id, variationLabel, campaignCreative,
+      organization, shotReferences: item.shotReferences,
       ...(keepRender ? { renders: item.renders, storyEdit } : {}) };
   }
 
   function addCopies(source: Item[], keepRender: boolean) {
     if (!source.length || items.length + source.length > limit) {
-      setNotice("There is room for 12 videos in the active batch. Free space before opening these copies.");
+      setNotice(`This workspace holds up to ${limit} projects. Free space before opening these copies.`);
       return false;
     }
     const copies = source.map((item) => copyDraft(item, keepRender));
@@ -245,9 +283,23 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     return true;
   }
 
-  function addVideo() {
+  function applyLocation(item: Item, location: StudioLocation): Item {
+    const prior = studioProjectLocation(item, workspace.data);
+    const organization = { ...item.organization, ...location, folderId: location.folderId };
+    if (prior.brandId === location.brandId) return { ...item, organization };
+    const brand = brands.find(({ id }) => id === location.brandId);
+    if (!brand) return item;
+    const kit = location.brandId === studioSecondSpring ? "second-spring" : "custom";
+    return { ...item, kit, organization: { ...organization, stage: item.organization?.stage === "archived" ? "archived" : undefined },
+      approved: undefined, stale: Boolean(item.script.trim()), context: undefined,
+      spec: { ...item.spec, brand: brand.id === studioUnassigned ? "" : brand.name, customContext: brand.context ?? "",
+        activeResearchBriefId: undefined, offer: undefined, subscribrWriting: undefined, subscribrSource: undefined } };
+  }
+
+  function addVideo(location: StudioLocation = { brandId: studioUnassigned }) {
+    if (!hydrated || dispatching || items.length >= limit) return;
     const item = blank();
-    setItems((rows) => [...rows, item]);
+    setItems((rows) => rows.length < limit ? [...rows, applyLocation(item, location)] : rows);
     setProjectId(item.spec.id);
     setSelectedShot(0);
   }
@@ -321,13 +373,55 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     clearPreview(id);
     const brand = kit === "second-spring" ? connected?.name ?? "Second Spring" : custom?.brand ?? "";
     patch(id, (row) => ({ ...row, kit, approved: undefined, context: undefined, stale: Boolean(row.script.trim()),
+      organization: { ...row.organization, brandId: undefined, folderId: undefined },
       spec: { ...row.spec, brand, customContext: kit === "custom" ? custom?.customContext ?? "" : "", activeResearchBriefId: undefined,
         offer: row.kit === kit && row.spec.brand === brand ? row.spec.offer : undefined } }));
   }
 
-  const approved = items.flatMap((item) => !item.approved || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
+  const approved = items.flatMap((item) => !item.approved || completionStage(item) === "archived" || (item.kit === "second-spring" && !canLoadBrand) ? [] : [item.approved]);
   const activeId = items.find(({ spec }) => spec.id === projectId)?.spec.id ?? items[0]?.spec.id;
-  const ready = items.filter(({ spec, script, pending, approved, stale }) => spec.keyword.trim() && (!script.trim() || stale) && !pending && !approved).length;
+  const activeItem = items.find(({ spec }) => spec.id === activeId);
+  const activePlan = itemPlan(activeItem);
+  const projects: ProjectNavigationEntry[] = items.map((item, index) => ({
+    id: item.spec.id, title: projectTitle(item, index), stage: completionStage(item), useCase: item.organization?.useCase ?? "",
+    location: studioProjectLocation(item, workspace.data), variation: Boolean(item.variationOf),
+  }));
+  const ready = Math.min(studioBatchLimit, items.filter((item) => completionStage(item) !== "archived" && item.spec.keyword.trim() &&
+    (!item.script.trim() || item.stale) && !item.pending && !item.approved).length);
+
+  function moveProject(id: string, location: StudioLocation) {
+    if (!workspace.available || !brands.some((brand) => brand.id === location.brandId)) return;
+    if (location.folderId && !workspace.data.folders.some((folder) => folder.id === location.folderId && folder.brandId === location.brandId)) return;
+    patch(id, (item) => item.pending || dispatching || uploading[id] ? item : applyLocation(item, location));
+  }
+
+  function orderProject(id: string, beforeId: string) {
+    if (id === beforeId || dispatching) return;
+    setItems((rows) => {
+      const current = rows.find((row) => row.spec.id === id);
+      if (!current || !rows.some((row) => row.spec.id === beforeId)) return rows;
+      return rows.flatMap((row) => row.spec.id === id ? [] : row.spec.id === beforeId ? [current, row] : [row]);
+    });
+  }
+
+  function attachLibraryAsset(asset: StudioMedia, shot?: number) {
+    if (!activeItem || activeItem.pending || dispatching || uploading[activeItem.spec.id]) return false;
+    const media = activeItem.spec.media ?? [];
+    if (media.length >= studioMediaPerProject && !media.some(({ id }) => id === asset.id)) {
+      setNotice("Remove a project attachment to make room for this asset.");
+      return false;
+    }
+    patch(activeItem.spec.id, (item) => {
+      const references = item.spec.media ?? [];
+      const spec = references.some(({ id }) => id === asset.id) ? item.spec : { ...item.spec, media: [...references, asset] };
+      const images = asset.type.startsWith("image/") && shot !== undefined
+        ? { ...item.storyEdit?.images, [shot]: asset.id } : item.storyEdit?.images;
+      return { ...item, spec, approved: item.approved ? { ...item.approved, spec } : undefined,
+        shotReferences: shot === undefined ? item.shotReferences : { ...item.shotReferences, [shot]: asset.id },
+        storyEdit: shot === undefined ? item.storyEdit : { ...item.storyEdit, images, storyboardApproved: undefined } };
+    });
+    return true;
+  }
   function download() {
     const url = URL.createObjectURL(productionZip(productionFiles(approved)));
     const anchor = document.createElement("a");
@@ -346,7 +440,12 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     </div>
     <div className="production-actions content-studio-runActions">
       {onExample && <button type="button" onClick={onExample}>Watch batch example</button>}
-      <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={addVideo}><Plus size={15} aria-hidden /> Add video</button>
+      <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={() => addVideo(activeItem ? studioProjectLocation(activeItem, workspace.data) : undefined)}><Plus size={15} aria-hidden /> Add video</button>
+      {workspace.data.sidebar.collapsed && <button type="button" onClick={() => void workspace.save({ ...workspace.data,
+        sidebar: { ...workspace.data.sidebar, collapsed: false } })}><PanelLeftOpen size={15} aria-hidden /> Show projects</button>}
+      {draftKey && workspace.available && workspace.data.sidebar.collapsed && <button type="button" onClick={() =>
+        setLibraryLocation(activeItem ? studioProjectLocation(activeItem, workspace.data) : { brandId: studioUnassigned })}>
+        <LibraryBig size={15} aria-hidden /> Brand assets</button>}
       {signedIn ? <button type="button" className="content-studio-runButton" disabled={!ready || dispatching || (Boolean(draftKey) && !drafts.savedRevision)}
         onClick={generateScripts}>{dispatching ? "Starting scripts…" : `Generate ${draftKey ? "batch " : ""}scripts${ready ? ` (${ready})` : ""}`}</button>
         : <Link href="/signin?next=%2Fcontent-studio">Sign in to generate scripts</Link>}
@@ -375,33 +474,37 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       : brandStatus === "checking" ? "Checking connected brand kits…" : "Could not verify the Second Spring kit. Refresh to retry."}</p>}
     {signedIn && <p className="production-hint">Script generation uses your agent credits.</p>}
     {notice && <p role="alert">{notice}</p>}
-    <div className="studio-project-grid">
-    {items.length > 0 && <nav className="studio-project-list" aria-label="Saved video projects">
-      <h3>Projects</h3>
-      {items.map(({ spec, variationOf, variationLabel }, index) => <button type="button" key={spec.id} aria-current={activeId === spec.id ? "page" : undefined} onClick={() => {
-        setProjectId(spec.id); setSelectedShot(0);
-      }}>
-        <span>{variationLabel || spec.keyword || `Video ${index + 1}`}</span>
-        <small>{[spec.brand, `${spec.duration}s`, variationOf ? "Variation" : null].filter(Boolean).join(" · ")}</small>
-      </button>)}
-    </nav>}
+    {libraryLocation && draftKey && workspace.available && <BrandAssetLibrary key={`${libraryLocation.brandId}:${libraryLocation.folderId ?? ""}:${activeId ?? ""}`}
+      initial={libraryLocation} brands={brands} folders={workspace.data.folders}
+      project={activeItem ? { title: projectTitle(activeItem, items.indexOf(activeItem)), media: activeItem.spec.media ?? [],
+        shots: activePlan?.shots.length ?? 0, selectedShot: Math.min(selectedShot, Math.max(0, (activePlan?.shots.length ?? 1) - 1)),
+        locked: Boolean(activeItem.pending || dispatching || uploading[activeItem.spec.id]) } : undefined}
+      onAttach={attachLibraryAsset} onClose={() => setLibraryLocation(undefined)} />}
+    <div className="studio-project-grid studio-organized-grid" data-dock={workspace.data.sidebar.side} data-collapsed={workspace.data.sidebar.collapsed}
+      style={{ "--studio-navigation-width": `${workspace.data.sidebar.width}px` } as CSSProperties}>
+    {!workspace.data.sidebar.collapsed && <ProjectSidebar organization={workspace.data} brands={brands} available={workspace.available}
+      saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={activeId}
+      onSave={workspace.save} onReload={workspace.reload} onOpen={(id) => {
+        setProjectId(id); setSelectedShot(0);
+      }} onNew={addVideo} onAssets={setLibraryLocation} onMove={moveProject} onOrder={orderProject} />}
     {items.map((item, index) => {
       const { spec } = item;
       const id = spec.id;
       if (id !== activeId) return null;
       const locked = dispatching || item.pending || uploading[id];
       const previewUrl = previews[id] || (item.renders?.length ? studioMediaUrl(item.renders.at(-1)!.id) : "");
-      let plan = item.approved?.plan;
-      if (!plan && item.script.trim()) {
-        try { plan = parseVideoPlan(item.script); } catch { /* Show the raw draft for correction. */ }
-      }
+      const plan = activePlan;
+      const location = studioProjectLocation(item, workspace.data);
+      const siblings = projects.filter(({ location: entry }) => entry.brandId === location.brandId && entry.folderId === location.folderId);
+      const position = siblings.findIndex((entry) => entry.id === id);
+      const path = [brands.find((brand) => brand.id === location.brandId)?.name, ...studioFolderTrail(location.folderId, workspace.data.folders).map(({ name }) => name)].filter(Boolean);
       return <div className={`studio-project-body${draftKey ? " studio-project-body-agent" : ""}`} key={id}>
       <VisualProduction canSeeExamples={canLoadBrand} agent={Boolean(draftKey)} hasPlan={Boolean(plan)}
         hasPreview={Boolean(item.approved || item.renders?.length)} onStage={onStage} />
       <article className="production-item">
         <div className="production-itemHeading">
-          <h3>{item.variationLabel || spec.keyword.trim() || `Video ${index + 1}`}</h3>
-          <span>{item.pending ? "Writing script" : item.approved ? "Approved" : item.stale ? "Brief changed" : item.variationOf ? "Variation" : item.script ? "Review script" : "Brief"}</span>
+          <h3>{projectTitle(item, index)}</h3>
+          <span>{studioStages[completionStage(item)]}</span>
           <button type="button" aria-label={`Create variation of video ${index + 1}`} title="Create variation" disabled={locked || items.length >= limit} onClick={() => { addCopies([item], false); }}><CopyPlus size={15} /></button>
           <button type="button" aria-label={`Remove video ${index + 1}`} disabled={locked} onClick={() => {
             clearPreview(id);
@@ -409,6 +512,29 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           }}><X size={15} /></button>
         </div>
         <p className="production-hint">{spec.brand || "Unbranded"} · {spec.duration}s · {chosenFrames(spec).join(", ")}</p>
+        {workspace.available && <details className="production-inputGroup studio-project-organize">
+          <summary>Project details · {path.join(" / ")}</summary>
+          <fieldset disabled={locked} className="production-fields">
+            <label>Project name<input value={item.organization?.title ?? ""} maxLength={120} placeholder={projectTitle(item, index)}
+              onChange={(event) => patch(id, (row) => ({ ...row, organization: { ...row.organization, title: event.target.value } }))} /></label>
+            <label>Use case<input value={item.organization?.useCase ?? ""} maxLength={80} placeholder="e.g. Paid ad, organic social, tutorial"
+              onChange={(event) => patch(id, (row) => ({ ...row, organization: { ...row.organization, useCase: event.target.value } }))} /></label>
+            <label>Project stage<select value={item.organization?.stage ?? ""} onChange={(event) => {
+              const stage = event.target.value as StudioStage | "";
+              patch(id, (row) => ({ ...row, organization: { ...row.organization, stage: stage || undefined } }));
+            }}><option value="">Automatic · {studioStages[completionStage({ ...item, organization: undefined })]}</option>
+              {Object.entries(studioStages).map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>
+            <label>Project brand<select value={location.brandId} onChange={(event) => moveProject(id, { brandId: event.target.value })}>
+              {brands.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
+            <label>Project folder<select value={location.folderId ?? ""} onChange={(event) => moveProject(id, { brandId: location.brandId, folderId: event.target.value || undefined })}>
+              <FolderOptions folders={workspace.data.folders} brandId={location.brandId} /></select></label>
+            <div className="content-studio-runActions production-wide">
+              {position > 0 && <button type="button" onClick={() => orderProject(id, siblings[position - 1].id)}>Move project up</button>}
+              {position < siblings.length - 1 && <button type="button" onClick={() => orderProject(siblings[position + 1].id, id)}>Move project down</button>}
+              {draftKey && <button type="button" onClick={() => setLibraryLocation(location)}>Open brand assets</button>}
+            </div>
+          </fieldset>
+        </details>}
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>

@@ -6,6 +6,7 @@ import type { StudioMedia } from "@/lib/studio/media-types";
 import type { ChangeStudioRun, StartStudioRun, StudioRun } from "@/lib/studio/runs";
 import type { KeywordLookup } from "@/lib/studio/keyword-research";
 import type { SubscribrChannelContext, SubscribrChannelEntry, SubscribrPage } from "@/lib/studio/subscribr";
+import type { StudioLocation, StudioOrganization } from "@/lib/studio/organization";
 
 const j = async <T,>(res: Response): Promise<T> => { if (!res.ok) throw new Error(`${res.status} ${await res.text()}`); return res.json() as Promise<T>; };
 
@@ -24,6 +25,24 @@ export const getStudioDrafts = <T>() => fetch("/api/studio/drafts", { cache: "no
   .then((r) => j<{ draft: StudioSnapshot<T> | null; versions: StudioVersion[] }>(r));
 export const getStudioRevision = <T>(revision: number) => fetch(`/api/studio/drafts?revision=${revision}`, { cache: "no-store" })
   .then((r) => j<{ draft: StudioSnapshot<T> }>(r));
+async function studioOrganizationRequest<T>(url: string, method = "GET", input?: unknown): Promise<T> {
+  const res = await fetch(url, { method, cache: "no-store", ...(input ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) } : {}) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) throw new Error(data?.error ?? "Studio couldn’t reach the organization service.");
+  return data as T;
+}
+
+export const getStudioWorkspace = () => studioOrganizationRequest<{ revision: number; organization: StudioOrganization }>("/api/studio/workspace");
+export const saveStudioWorkspace = (revision: number, organization: StudioOrganization) =>
+  studioOrganizationRequest<{ revision: number }>("/api/studio/workspace", "PUT", { revision, organization });
+export const getStudioBrandAssets = ({ brandId, folderId }: StudioLocation, page: number, search: string) =>
+  studioOrganizationRequest<{ assets: StudioMedia[]; hasMore: boolean }>(`/api/studio/brand-assets?${new URLSearchParams({
+    brandId, ...(folderId ? { folderId } : {}), page: String(page), search,
+  })}`);
+export const fileStudioBrandAsset = (location: StudioLocation, asset: StudioMedia) => studioOrganizationRequest<{ asset: StudioMedia }>(
+  "/api/studio/brand-assets", "POST", { ...location, action: "file", id: asset.id, name: asset.name });
+export const importStudioBrandImage = (location: StudioLocation, url: string, name?: string) => studioOrganizationRequest<{ asset: StudioMedia }>(
+  "/api/studio/brand-assets", "POST", { ...location, action: "import-image", url, name });
 export async function saveStudioDrafts(expectedRevision: number, items: unknown[]) {
   const body = JSON.stringify({ expectedRevision, items });
   const response = await fetch("/api/studio/drafts", {

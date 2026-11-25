@@ -21,6 +21,8 @@ import { buildZip, type ZipEntry } from "./zip";
  * outlive the account so cookies and tokens issued before the deletion stay refused.
  */
 export const USER_TABLES = [
+  "studio_brand_assets",
+  "studio_workspaces",
   "studio_runs",
   "studio_draft_versions",
   "task_events",
@@ -71,6 +73,8 @@ const SECRET_COLUMNS = new Set(["orgo_key_enc", "hermes_key_enc", "secret_enc", 
 
 /** Tables in the export, in a readable order: every user table. */
 const EXPORT_TABLES = [
+  "studio_brand_assets",
+  "studio_workspaces",
   "studio_runs",
   "studio_draft_versions",
   "accounts", "settings", "tasks", "task_events", "task_files", "shares", "projects", "project_files", "project_connectors", "project_skills",

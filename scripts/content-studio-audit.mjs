@@ -33,6 +33,20 @@ const brief = {
 };
 const prior = [];
 assert.equal(stageRules.length, stages.length);
+const { studioFolderTrail, studioOrganizationSchema, studioProjectLocation, defaultStudioOrganization } = require("../src/lib/studio/organization.ts");
+const parent = "1c19d13b-8bde-4ae3-aed8-9424714afe31";
+const child = "afec7a0c-8b9e-4ba3-a531-62f050310d94";
+const workspace = { ...defaultStudioOrganization, folders: [
+  { id: parent, brandId: "second-spring", parentId: null, name: "Social" },
+  { id: child, brandId: "second-spring", parentId: parent, name: "Shorts" },
+] };
+assert.equal(studioOrganizationSchema.safeParse(workspace).success, true);
+assert.equal(studioOrganizationSchema.safeParse({ ...workspace, folders: [{ ...workspace.folders[0], parentId: child }, workspace.folders[1]] }).success, false);
+assert.equal(studioOrganizationSchema.safeParse({ ...workspace, folders: [workspace.folders[0], { ...workspace.folders[1], brandId: "unassigned" }] }).success, false);
+assert.deepEqual(studioFolderTrail(child, workspace.folders).map(({ name }) => name), ["Social", "Shorts"]);
+assert.deepEqual(studioProjectLocation({ kit: "second-spring", spec: { brand: "Second Spring" }, organization: { folderId: child } }, workspace),
+  { brandId: "second-spring", folderId: child });
+console.log("PASS nested Studio folder validation, project location, and legacy brand mapping");
 for (const [index, stage] of stages.entries()) {
   const fields = stageRules[index].fields;
   const handoff = Object.fromEntries(fields.map((name) => [name, "Fixture for " + name]));

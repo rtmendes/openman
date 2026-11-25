@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStudioDrafts, getStudioRevision, saveStudioDrafts, type StudioVersion } from "@/lib/agent/client";
+import { studioProjectLimit } from "@/lib/studio/organization";
 
 type SaveStatus = "local" | "opening" | "ready" | "saving" | "saved" | "offline" | "conflict";
 type LocalDraft<T> = { items: T[]; revision: number; dirty: boolean };
@@ -27,7 +28,7 @@ export function useStudioDrafts<T>(draftKey: string | undefined, legacyKey: stri
         const cached = JSON.parse(sessionStorage.getItem(cacheKey) ?? "null") as LocalDraft<T> | T[] | null;
         if (cached && !Array.isArray(cached) && Array.isArray(cached.items)) return cached;
         const legacy = cached ?? JSON.parse(sessionStorage.getItem(legacyKey) ?? "[]");
-        return { items: Array.isArray(legacy) ? legacy.slice(0, 12) : [], revision: 0, dirty: Array.isArray(legacy) && legacy.length > 0 };
+        return { items: Array.isArray(legacy) ? legacy.slice(0, studioProjectLimit) : [], revision: 0, dirty: Array.isArray(legacy) && legacy.length > 0 };
       } catch { return { items: [], revision: 0, dirty: false }; }
     })();
     async function load() {

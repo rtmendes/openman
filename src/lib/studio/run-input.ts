@@ -4,6 +4,7 @@ import { platforms } from "@/app/content-studio/workflow";
 import { storyLabels, storyStyles } from "@/app/content-studio/story-workflow";
 import { db, fail } from "@/lib/db/client";
 import { studioDraft } from "@/lib/db/studio-drafts";
+import { studioWorkspace } from "@/lib/db/studio-workspaces";
 import { operatorFor } from "@/lib/observability/operator";
 import type { Session } from "@/lib/session";
 import { studioMediaPerProject } from "./media-types";
@@ -12,10 +13,12 @@ import { researchBriefEvidence, researchBriefsSchema } from "./research-briefs";
 import { campaignInventoryDraftSchema, campaignResearchParent, offerInputSchema, savedContentInventory, usableOffer } from "./campaign-input";
 import { studioSourceKey, type StartStudioRun, type StudioRunInput } from "./runs";
 import { subscribrWritingDirection, subscribrWritingSchema } from "./subscribr";
+import { studioProjectOrganizationSchema, studioUnassigned } from "./organization";
 
 const ratio = z.enum(["9:16", "16:9", "1:1"]);
 const project = z.object({
   kit: z.enum(["custom", "second-spring"]),
+  organization: studioProjectOrganizationSchema.optional(),
   script: z.string().max(40000),
   spec: z.object({
     id: z.uuid(), keyword: z.string().trim().min(1).max(180), brand: z.string().max(120),
@@ -53,6 +56,12 @@ export async function runInput(session: Session, input: StartStudioRun): Promise
   const campaign = isCampaign && offer ? { offer, inventory: savedContentInventory(campaignDraft, draftInventory),
     researchParent: campaignResearchParent(campaignDraft, draftInventory) } : undefined;
   let context = spec.customContext.trim();
+  const brandId = parsed.data.organization?.brandId;
+  if (kit === "custom" && brandId && brandId !== studioUnassigned) {
+    const { organization } = await studioWorkspace(session.userId);
+    const brand = organization.brands.find(({ id }) => id === brandId);
+    if (brand) { spec.brand = brand.name; context = brand.context.trim(); }
+  }
   if (kit === "second-spring") {
     if (!(await operatorFor(session))?.owner) throw new Response("The connected brand kit is unavailable.", { status: 404 });
     const { data, error } = await db().rpc("second_spring_context");
