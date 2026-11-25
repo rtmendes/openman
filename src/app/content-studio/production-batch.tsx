@@ -396,6 +396,8 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         try { plan = parseVideoPlan(item.script); } catch { /* Show the raw draft for correction. */ }
       }
       return <div className={`studio-project-body${draftKey ? " studio-project-body-agent" : ""}`} key={id}>
+      <VisualProduction canSeeExamples={canLoadBrand} agent={Boolean(draftKey)} hasPlan={Boolean(plan)}
+        hasPreview={Boolean(item.approved || item.renders?.length)} onStage={onStage} />
       <article className="production-item">
         <div className="production-itemHeading">
           <h3>{item.variationLabel || spec.keyword.trim() || `Video ${index + 1}`}</h3>
@@ -407,8 +409,6 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           }}><X size={15} /></button>
         </div>
         <p className="production-hint">{spec.brand || "Unbranded"} · {spec.duration}s · {chosenFrames(spec).join(", ")}</p>
-        <VisualProduction canSeeExamples={canLoadBrand} agent={Boolean(draftKey)} hasPlan={Boolean(plan)}
-          hasPreview={Boolean(item.approved || item.renders?.length)} onStage={onStage} />
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
@@ -469,7 +469,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
           <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
-        {canLoadBrand && <SubscribrPanel connected={Boolean(providers?.subscribr)} current={spec.subscribrSource}
+        {canLoadBrand && (providers || spec.subscribrSource || spec.subscribrWriting) && <SubscribrPanel connected={Boolean(providers?.subscribr)} current={spec.subscribrSource}
           writing={spec.subscribrWriting} locked={Boolean(locked)}
           onWriting={(subscribrWriting) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrWriting } }))}
           onImport={(subscribrSource) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrSource } }))} />}

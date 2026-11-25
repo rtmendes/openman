@@ -63,8 +63,6 @@ export function PackagingPreview({ result, spec, kit }: { result: StudioPackagin
   const thermostatProject = kit === "second-spring" && /thermostat|hostage talks/i.test(spec.keyword);
   return <section className="studio-packaging" aria-label="Title and thumbnail options">
     <h4>Three title and thumbnail options</h4>
-    <p>{result.patterns}</p>
-    <p className="production-hint">16:9 thumbnail previews. Each option includes art direction for the final crop.</p>
     <div className="studio-packaging-options">{result.options.map((option, index) => {
       const reference = references[index] ?? references[0];
       const src = reference ? studioMediaUrl(reference.id) : thermostatProject ? `/studio/reference/${secondSpringStills[option.look]}.jpg` : "";
@@ -77,13 +75,14 @@ export function PackagingPreview({ result, spec, kit }: { result: StudioPackagin
           {src && <div className="studio-thumb-photo" style={{ backgroundImage: `url(${src})` }} />}
           <figcaption style={{ fontSize: `${textSize}cqw` }}>{lines.map((line, i) => <span key={i}>{line}</span>)}</figcaption>
         </figure>
-        <p>{option.composition}</p><small>{option.reason}</small>
+        <details><summary>Art direction</summary><p>{option.composition}</p><small>{option.reason}</small></details>
         {src && <div className="studio-assistant-actions"><button type="button" onClick={() => {
           setError("");
           void downloadPng(option, src, index).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not export this thumbnail."));
         }}>Download thumbnail {index + 1}</button></div>}
       </article>;
     })}</div>
+    <details><summary>Research behind these options</summary><p>{result.patterns}</p></details>
     {error && <p role="alert">{error}</p>}
   </section>;
 }
