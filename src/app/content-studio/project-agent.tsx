@@ -10,6 +10,7 @@ import { PackagingPreview } from "./packaging-preview";
 import { YouTubeEvidenceTable } from "./youtube-evidence-table";
 import { readStudioPackaging } from "@/lib/studio/packaging";
 import { stages } from "./workflow";
+import type { ProductionView } from "./production-views";
 import { stageRules } from "./pipeline";
 import { missingOfferFields, usableOffer } from "@/lib/studio/campaign-input";
 import { offerStages } from "@/lib/studio/campaign-workflow";
@@ -21,7 +22,8 @@ const phaseLabels: Record<StudioRun["phase"], string> = {
 };
 type RunRequest = { kind: "script" } | { kind: "workflow"; stage?: number; workflow?: "offer" } | { kind: "suggestion"; suggestion: StudioSuggestion };
 
-export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy, onSavedResearch, onCampaign }: {
+export function ProjectAgent({ view, spec, kit, script, plan, shot, onShot, revision, stage, onStage, activity, canStart, onPlan, onSuggestion, canCopy, onSavedResearch, onCampaign }: {
+  view: ProductionView;
   spec: VideoSpec; kit: string; script: string; plan?: VideoPlan; shot: number; onShot: (index: number) => void; revision?: number;
   stage: number; onStage: (index: number) => void; activity: number; canStart: boolean; canCopy: boolean;
   onPlan: (run: StudioRun, copy: boolean) => void;
@@ -34,7 +36,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [pollError, setPollError] = useState(false);
-  const [resultId, setResultId] = useState("");
+  const [result, setResult] = useState<{ id: string; view: ProductionView }>();
   const [changeNotes, setChangeNotes] = useState("");
   const [direction, setDirection] = useState("");
   const [ratio, setRatio] = useState<VideoRatio>(chosenFrames(spec)[0]);
@@ -76,7 +78,7 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       return [{ ...run, input: { ...run.input, sourceKey } }, ...old.filter(({ id }) => id !== run.id)]
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
     });
-    setResultId(run.id);
+    setResult({ id: run.id, view });
   }
 
   async function start(input: RunRequest) {
@@ -107,7 +109,14 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
     void start({ kind: "suggestion", suggestion: { action, shot: action === "hook" ? 0 : target, direction } });
   }
 
-  const run = runs.find(({ id }) => id === resultId) ?? runs[0];
+  const researchRun = runs.find(({ state }) => state.outputs.some(({ result }) => result.stage === 1));
+  const packagingRun = runs.find(({ state }) => state.packaging || state.outputs.some(({ result }) => result.stage === 2));
+  const relevantRun = view === "research" ? runs.find((entry) => entry.input.singleStage === 1) ?? researchRun
+    : view === "packaging" ? runs.find((entry) => entry.input.singleStage === 2) ?? packagingRun
+      : view === "script" ? runs.find((entry) => entry.kind === "script" || entry.input.singleStage === 6)
+        : view === "narration" ? runs.find((entry) => entry.input.suggestion?.action === "narration")
+          : view === "shots" ? runs.find((entry) => entry.input.suggestion?.action === "visual") : undefined;
+  const run = (result?.view === view ? runs.find(({ id }) => id === result.id) : undefined) ?? relevantRun ?? runs[0];
   const campaign = Boolean(run?.input.campaign);
   const progressStages = campaign ? offerStages : stages;
   const activeKind = (kind: StudioRun["kind"]) => runs.some((entry) => entry.kind === kind && isStudioRunOpen(entry.phase));
@@ -115,9 +124,10 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const missing = missingOfferFields(spec.offer);
   const offerReady = Boolean(usableOffer(spec.offer));
   const selected = run?.input.suggestion;
-  const research = run?.state.stage === 1 ? run.state.outputs.find(({ result }) => result.stage === 1)?.result : undefined;
-  let packageOptions = run?.state.packaging;
-  const packagedHandoff = run?.state.outputs.find(({ result }) => result.stage === 2)?.result.handoff;
+  const research = view === "research" ? researchRun?.state.outputs.find(({ result }) => result.stage === 1)?.result : undefined;
+  const packageRun = view === "packaging" ? (run?.state.packaging ? run : packagingRun) : undefined;
+  let packageOptions = packageRun?.state.packaging;
+  const packagedHandoff = packageRun?.state.outputs.find(({ result }) => result.stage === 2)?.result.handoff;
   if (!packageOptions && packagedHandoff?.recommendedOption) {
     try { packageOptions = readStudioPackaging(JSON.stringify({ patterns: packagedHandoff.patterns,
       options: JSON.parse(packagedHandoff.thumbnailOptions), recommendation: Number(packagedHandoff.recommendedOption) })); }
@@ -130,9 +140,14 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
   const matchingDraft = run ? matchesStudioSource(run, { kit, spec, script }, revision) : false;
   const frame = chosenFrames(spec).includes(ratio) ? ratio : chosenFrames(spec)[0];
   const image = spec.media?.find(({ type }) => type.startsWith("image/"));
+  const suggestions: Record<ProductionView, StudioSuggestion["action"][]> = {
+    brief: ["angles"], research: ["angles"], script: ["hook", "narration"], packaging: ["caption"],
+    narration: ["narration"], shots: ["visual", "caption"], review: ["review", "caption"],
+  };
+  const showWorkflow = view === "brief" || view === "research" || view === "script" || view === "packaging" || view === "review";
 
   return <>
-    {packageOptions && <PackagingPreview result={packageOptions} spec={run.input.spec} kit={run.input.kit} />}
+    {packageOptions && packageRun && <PackagingPreview result={packageOptions} spec={packageRun.input.spec} kit={packageRun.input.kit} />}
     {research && <section className="studio-packaging" aria-label="Saved YouTube research">
       <h4>Saved YouTube research</h4>
       <p>{research.summary}</p>
@@ -141,37 +156,38 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
     <aside className="studio-project-agent" aria-label="Project assistant">
     <section id="studio-suggestions" className="studio-assistant-card" aria-labelledby="studio-assistant-heading">
       <h3 id="studio-assistant-heading"><Sparkles size={16} aria-hidden /> AI suggestions</h3>
-      <label>Shot<select value={target} disabled={!plan} onChange={(event) => onShot(Number(event.target.value))}>
+      {(view === "script" || view === "narration" || view === "shots") && <label>Shot<select value={target} disabled={!plan} onChange={(event) => onShot(Number(event.target.value))}>
         {!plan ? <option value={0}>No shot plan yet</option> : plan.shots.map((entry, index) => <option value={index} key={index}>Shot {index + 1} · {index ? plan.shots[index - 1].end : 0}–{entry.end}s</option>)}
-      </select></label>
+      </select></label>}
       <label>Direction <span className="production-hint">(optional)</span><textarea maxLength={500} rows={2} value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="Keep the punchline dry. Shorten the setup." /></label>
       <div className="studio-assistant-actions">
-        {(spec.storyStyle || Boolean(spec.keywordBoard?.shortlist.length)) && <button type="button" disabled={baseDisabled || activeKind("suggestion")}
+        {(view === "brief" || view === "research") && (spec.storyStyle || Boolean(spec.keywordBoard?.shortlist.length)) && <button type="button" disabled={baseDisabled || activeKind("suggestion")}
           onClick={() => suggest("story-pitches")}>{spec.keywordBoard?.shortlist.length ? "Pitch 10 ideas from shortlist" : "Draft 10 story pitches"}</button>}
-        {([ ["angles", "Suggest angles"], ["hook", "Write hooks"], ["narration", "Rewrite narration"], ["caption", "Write captions"], ["visual", "Suggest layouts"], ["review", "Review draft"] ] as const).map(([action, label]) => (
+        {([ ["angles", "Suggest angles"], ["hook", "Write hooks"], ["narration", "Rewrite narration"], ["caption", "Write captions"], ["visual", "Suggest layouts"], ["review", "Review draft"] ] as const).filter(([action]) => suggestions[view].includes(action)).map(([action, label]) => (
           <button type="button" key={action} disabled={baseDisabled || activeKind("suggestion") || (action !== "angles" && !plan)} onClick={() => suggest(action)}>{label}</button>
         ))}
       </div>
     </section>
-    <section className="studio-assistant-card" aria-labelledby="studio-run-heading">
+    {showWorkflow && <section className="studio-assistant-card" aria-labelledby="studio-run-heading">
       <h3 id="studio-run-heading"><Workflow size={16} aria-hidden /> Workflow</h3>
       {!revision && <p className="production-hint">Save your project to enable agent runs.</p>}
-      <label>Workflow stage<select value={stage} onChange={(event) => onStage(Number(event.target.value))}>
-        {stages.map(({ title }, index) => <option value={index} key={title}>{title}</option>)}
-      </select></label>
       <div className="studio-assistant-actions">
-        <button type="button" disabled={baseDisabled || activeKind("script")} onClick={() => void start({ kind: "script" })}>Generate script</button>
-        <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow" })}>Run full workflow</button>
-        <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow", stage })}>Run selected stage</button>
-        <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => {
-          onStage(1); void start({ kind: "workflow", stage: 1 });
-        }}>Scan YouTube with agent</button>
+        {view === "script" && <button type="button" disabled={baseDisabled || activeKind("script")} onClick={() => void start({ kind: "script" })}>Generate script</button>}
+        {(view === "brief" || view === "review") && <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow" })}>Run full workflow</button>}
+        {view === "research" && <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow", stage: 1 })}>Scan YouTube with agent</button>}
+        {view === "packaging" && <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow", stage: 2 })}>Generate titles and covers</button>}
       </div>
-      <details><summary>Stage instructions</summary><p>{stageRules[stage].check}</p><ol>{stages[stage].instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol></details>
+      <details><summary>Run an individual workflow step</summary>
+        <label>Workflow stage<select value={stage} onChange={(event) => onStage(Number(event.target.value))}>
+          {stages.map(({ title }, index) => <option value={index} key={title}>{title}</option>)}
+        </select></label>
+        <button type="button" disabled={baseDisabled || activeKind("workflow")} onClick={() => void start({ kind: "workflow", stage })}>Run selected stage</button>
+        <p>{stageRules[stage].check}</p><ol>{stages[stage].instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
+      </details>
       <p className="production-hint">Runs use agent credits.</p>
-    </section>
+    </section>}
 
-    <section className="studio-assistant-card" aria-labelledby="studio-offer-run-heading">
+    {view === "brief" && <section className="studio-assistant-card" aria-labelledby="studio-offer-run-heading">
       <h3 id="studio-offer-run-heading">Offer campaign</h3>
       <p>Review the three-piece editorial plan first. The agent drafts and reviews the creatives after you approve it.</p>
       {missing.length > 0 ? <p className="production-hint">Add {missing.join(", ").toLowerCase()} in Offer and editorial planning.</p>
@@ -180,12 +196,12 @@ export function ProjectAgent({ spec, kit, script, plan, shot, onShot, revision, 
       <div className="studio-assistant-actions"><button type="button" disabled={baseDisabled || !offerReady || activeKind("workflow")}
         onClick={() => void start({ kind: "workflow", workflow: "offer" })}>Plan offer campaign</button></div>
       <p className="production-hint">Each agent step uses credits. The campaign stays private.</p>
-    </section>
+    </section>}
 
     {(error || pollError) && <p role="alert">{error || "Could not refresh the run history. Retrying automatically."}</p>}
     {run && <section className="studio-assistant-card" aria-labelledby="studio-result-heading">
       <h3 id="studio-result-heading">Run results</h3>
-      <label>History<select value={run.id} onChange={(event) => { setResultId(event.target.value); setChangeNotes(""); }}>
+      <label>History<select value={run.id} onChange={(event) => { setResult({ id: event.target.value, view }); setChangeNotes(""); }}>
         {runs.map((entry) => <option key={entry.id} value={entry.id}>
           {entry.input.campaign ? "Offer campaign" : entry.input.suggestion ? suggestionActions[entry.input.suggestion.action] : entry.kind === "script" ? "Script" : entry.input.singleStage !== undefined ? stages[entry.input.singleStage].title : "Full workflow"} · {phaseLabels[entry.phase]} · {new Date(entry.created_at).toLocaleString()}
         </option>)}

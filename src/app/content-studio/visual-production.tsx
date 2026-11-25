@@ -1,58 +1,45 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowRight, Play, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { StudioMedia } from "@/lib/studio/media-types";
 import { AssetPreview, AssetThumbnail, attachmentAsset } from "./asset-preview";
 import { chosenFrames, type VideoPlan, type VideoSpec } from "./production";
+import { productionViews, type ProductionView } from "./production-views";
 
-const steps = [
-  { id: "research", title: "Research", demo: "outliers", target: "studio-topic-research", action: "Open topic research", stage: 1 },
-  { id: "script", title: "Script", demo: "script", target: "studio-run-heading", action: "Open script workflow", stage: 6 },
-  { id: "packaging", title: "Titles & covers", demo: "packaging", target: "studio-run-heading", action: "Open title and thumbnail workflow", stage: 2 },
-  { id: "narration", title: "Narration", demo: "vertical", target: "studio-narration", action: "Hear delivery samples" },
-  { id: "shots", title: "Storyboard", demo: "episode", target: "studio-storyboard", action: "Open shot board" },
-  { id: "review", title: "Review & export", demo: "batch", target: "studio-video-preview", action: "Open render review" },
-] as const;
-
-export function VisualProduction({ canSeeExamples, agent, hasPlan, hasPreview, onStage }: {
-  canSeeExamples: boolean; agent: boolean; hasPlan: boolean; hasPreview: boolean; onStage: (stage: number) => void;
+export function VisualProduction({ view, onView }: {
+  view: ProductionView; onView: (view: ProductionView) => void;
 }) {
-  const [selected, setSelected] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const step = steps[selected];
-  const targetId = step.id === "shots" && !hasPlan ? "studio-references"
-    : step.id === "review" && !hasPreview ? "studio-script"
-      : step.target === "studio-run-heading" && !agent ? "studio-script" : step.target;
-  const action = step.id === "shots" && !hasPlan ? "Add visual references"
-    : step.id === "review" && !hasPreview ? "Open script for review" : step.action;
-
-  return <section className="studio-visual-production" aria-label="Video production stages">
-    <nav className="studio-visual-steps" aria-label="Production stages">
-      {steps.map(({ id, title }, index) => <button type="button" key={id} aria-pressed={selected === index}
-        onClick={() => { setSelected(index); setPlaying(false); }}>
-        <Image src={`/studio/workflow/${id}.webp`} alt="" width={412} height={412} unoptimized />
+  return <section id="studio-reference" className="studio-visual-production" aria-label="Video production workflow">
+    <div className="studio-visual-steps" role="tablist" aria-label="Production stages">
+      {productionViews.map(({ id, title, image }, index) => <button type="button" role="tab" key={id}
+        id={`studio-tab-${id}`} aria-controls={`studio-panel-${id}`} aria-selected={view === id} tabIndex={view === id ? 0 : -1}
+        onClick={() => onView(id)} onKeyDown={(event) => {
+          const count = productionViews.length;
+          let next: number;
+          if (event.key === "ArrowRight") next = (index + 1) % count;
+          else if (event.key === "ArrowLeft") next = (index + count - 1) % count;
+          else if (event.key === "Home") next = 0;
+          else if (event.key === "End") next = count - 1;
+          else return;
+          event.preventDefault();
+          const nextView = productionViews[next].id;
+          onView(nextView);
+          document.getElementById(`studio-tab-${nextView}`)?.focus();
+        }}>
+        <Image src={`/studio/workflow/${image}.webp`} alt="" width={412} height={412} unoptimized />
         <span>{title}</span>
       </button>)}
-    </nav>
-    <div className="studio-visual-actions">
-      <a href={`#${targetId}`} onClick={(event) => {
-        event.preventDefault();
-        if ("stage" in step) onStage(step.stage);
-        const target = document.getElementById(targetId);
-        const detail = target instanceof HTMLDetailsElement ? target : target?.querySelector("details");
-        if (detail) detail.open = true;
-        target?.scrollIntoView({ block: "start", behavior: "smooth" });
-      }}>{action} <ArrowRight size={15} aria-hidden /></a>
-      {canSeeExamples && <button type="button" aria-expanded={playing} onClick={() => setPlaying(!playing)}>
-        {playing ? <X size={14} aria-hidden /> : <Play size={14} aria-hidden />}
-        {playing ? "Close example" : `Watch ${step.title.toLowerCase()} example`}
-      </button>}
     </div>
-    {playing && <video key={step.demo} controls playsInline autoPlay preload="metadata"
-      poster={`/studio/workflow/${step.id}.webp`} src={`/api/admin/second-spring/reference/${step.demo}`}
-      aria-label={`Second Spring example for ${step.title}`} />}
+  </section>;
+}
+
+export function ProductionViewPanel({ id, active, children }: { id: ProductionView; active: ProductionView; children: ReactNode }) {
+  const step = productionViews.find((view) => view.id === id)!;
+  return <section className="studio-workflow-panel" role="tabpanel" id={`studio-panel-${id}`}
+    aria-labelledby={`studio-tab-${id}`} hidden={active !== id}>
+    <header><h4>{step.title}</h4><p>{step.synopsis}</p></header>
+    {children}
   </section>;
 }
 

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const studioProjectLimit = 100;
 export const studioBatchLimit = 12;
+export const studioSidebarMinWidth = 160;
+export const studioSidebarMaxWidth = 380;
 export const studioUnassigned = "unassigned";
 export const studioSecondSpring = "second-spring";
 export const brandIdSchema = z.union([z.uuid(), z.literal(studioSecondSpring), z.literal(studioUnassigned)]);
@@ -20,7 +22,7 @@ const folderSchema = z.object({ id: z.uuid(), brandId: brandIdSchema, name: z.st
 export const studioOrganizationSchema = z.object({
   brands: z.array(brandSchema).max(100),
   folders: z.array(folderSchema).max(500),
-  sidebar: z.object({ side: z.enum(["left", "right"]), width: z.number().int().min(200).max(380), collapsed: z.boolean() }),
+  sidebar: z.object({ side: z.enum(["left", "right"]), width: z.number().int().min(studioSidebarMinWidth).max(studioSidebarMaxWidth), collapsed: z.boolean() }),
 }).superRefine(({ brands, folders }, ctx) => {
   const brandIds = new Set<string>([studioUnassigned, studioSecondSpring]);
   const brandNames = new Set<string>(["second spring", "unassigned"]);

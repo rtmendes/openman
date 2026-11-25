@@ -11,7 +11,14 @@ export const GET = withErrorReporting("admin.second-spring.video", async () => {
     throw error;
   }
 
-  const { data, error } = await db().rpc("second_spring_preview");
+  const client = db();
+  const { data: remastered } = await client.storage.from("mahara-studio-private").createSignedUrl("hostage-talks-neutral.mp4", 900);
+  if (remastered?.signedUrl) {
+    return new Response(null, { status: 302, headers: {
+      Location: remastered.signedUrl, "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer",
+    } });
+  }
+  const { data, error } = await client.rpc("second_spring_preview");
   if (error) fail("load Second Spring video", error);
   if (typeof data !== "string") return new Response(null, { status: 404 });
   const video = Buffer.from(data, "base64");

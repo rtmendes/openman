@@ -1,12 +1,14 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Folder, LibraryBig, PanelLeftClose, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, LibraryBig, PanelLeftClose, PanelRightClose, Plus, Search } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import {
   studioFolderTrail, studioStages, studioUnassigned,
   type StudioFolder, type StudioLocation, type StudioOrganization, type StudioStage,
 } from "@/lib/studio/organization";
+import { SidebarResize } from "./sidebar-resize";
 
+export const projectSidebarId = "studio-project-navigation";
 export type ProjectNavigationEntry = { id: string; title: string; stage: StudioStage; useCase: string; location: StudioLocation; variation: boolean };
 export type SidebarBrand = { id: string; name: string; context?: string };
 const projectMime = "application/x-mahara-studio-project";
@@ -19,12 +21,13 @@ export function FolderOptions({ folders, brandId, excluded }: { folders: StudioF
 }
 
 export function ProjectSidebar({ organization, brands, projects, activeId, available, saving, status, cloud, onReload, onSave, onOpen,
-  onMove, onOrder, onNew, onAssets }: {
+  onMove, onOrder, onNew, onAssets, sidebarWidth, onResize, onHide }: {
   organization: StudioOrganization; brands: SidebarBrand[]; projects: ProjectNavigationEntry[]; activeId?: string;
   available: boolean; saving: boolean; status: string; cloud: boolean; onReload: () => void;
   onSave: (organization: StudioOrganization) => Promise<boolean>; onOpen: (id: string) => void;
   onMove: (id: string, location: StudioLocation) => void; onOrder: (id: string, beforeId: string) => void;
   onNew: (location: StudioLocation) => void; onAssets: (location: StudioLocation) => void;
+  sidebarWidth: number; onResize: (width: number) => void; onHide: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<StudioStage | "">("");
@@ -150,10 +153,12 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
       });
   }
 
-  return <nav className="studio-project-navigation" aria-label="Studio project navigation">
+  const CloseIcon = organization.sidebar.side === "left" ? PanelLeftClose : PanelRightClose;
+  return <nav id={projectSidebarId} className="studio-project-navigation" aria-label="Studio project navigation">
     <header><h3>Projects</h3>
-      <button type="button" title="Collapse sidebar" aria-label="Collapse project sidebar" disabled={locked}
-        onClick={() => void onSave({ ...organization, sidebar: { ...organization.sidebar, collapsed: true } })}><PanelLeftClose size={16} /></button>
+      <button type="button" title="Hide Projects sidebar" aria-label="Hide Projects sidebar" disabled={saving} onClick={onHide}>
+        <CloseIcon size={16} aria-hidden /> Hide
+      </button>
     </header>
     {status && <p role="status">{status} <button type="button" onClick={onReload}>Reload</button></p>}
     <label className="studio-project-search"><Search size={15} aria-hidden /><input aria-label="Search projects" value={search} placeholder="Title, use case or stage" onChange={(event) => setSearch(event.target.value)} /></label>
@@ -213,10 +218,12 @@ export function ProjectSidebar({ organization, brands, projects, activeId, avail
         <label>Sidebar position<select value={organization.sidebar.side} onChange={(event) => void onSave({
           ...organization, sidebar: { ...organization.sidebar, side: event.target.value === "right" ? "right" : "left" },
         })}><option value="left">Left</option><option value="right">Right</option></select></label>
-        <label>Sidebar width<select value={organization.sidebar.width} onChange={(event) => void onSave({
-          ...organization, sidebar: { ...organization.sidebar, width: Number(event.target.value) },
-        })}><option value={204}>Compact</option><option value={244}>Standard</option><option value={320}>Wide</option></select></label>
+        <label>Sidebar width<select value={organization.sidebar.width} onChange={(event) => onResize(Number(event.target.value))}>
+          {![204, 244, 320].includes(organization.sidebar.width) && <option value={organization.sidebar.width}>Custom · {organization.sidebar.width}px</option>}
+          <option value={204}>Compact</option><option value={244}>Standard</option><option value={320}>Wide</option>
+        </select></label>
       </fieldset>
     </details>}
+    <SidebarResize width={sidebarWidth} side={organization.sidebar.side} disabled={locked} onCommit={onResize} />
   </nav>;
 }

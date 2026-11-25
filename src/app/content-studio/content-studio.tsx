@@ -11,7 +11,6 @@ import { getSecondSpringContext } from "@/lib/agent/client";
 import { examples, formats, makePrompt, platforms, runtimes, stages, type Brief } from "./workflow";
 import { WorkflowRunner } from "./workflow-runner";
 import { ProductionBatch } from "./production-batch";
-import { ReferenceLibrary } from "./reference-library";
 import "./studio.css";
 
 const icons = [Settings2, Search, Image, ListVideo, Film, Smartphone, FileText];
@@ -37,7 +36,6 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandError, setBrandError] = useState("");
   const [showScript, setShowScript] = useState(false);
-  const [referenceIndex, setReferenceIndex] = useState(6);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -106,20 +104,6 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
     setFeedback("");
   }
 
-  function seeExample(index: number) {
-    setReferenceIndex(index);
-    document.getElementById("studio-reference")?.scrollIntoView({ block: "start" });
-  }
-
-  function openExampleWorkflow(index: number) {
-    if (index === stages.length) {
-      document.getElementById("video-production")?.scrollIntoView({ block: "start" });
-      return;
-    }
-    selectStep(index);
-    document.getElementById(draftKey ? "studio-run-heading" : "stage-workbench")?.scrollIntoView({ block: "start" });
-  }
-
   const StageIcon = icons[active];
 
   return (
@@ -132,7 +116,6 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
             setTheme(next);
             try { localStorage.setItem("mahara:studio-theme", next); } catch { /* Theme works for this visit. */ }
           }}>{theme === "dark" ? <Sun size={15} aria-hidden /> : <Moon size={15} aria-hidden />}{theme === "dark" ? "Light" : "Dark"}</button>
-          {canLoadBrand && <a href="#studio-reference" className="content-studio-back"><Play size={15} aria-hidden /> Examples</a>}
           <a href="#video-production" className="content-studio-back"><Film size={15} aria-hidden /> Video production</a>
           <Link href="/" className="content-studio-back"><ArrowLeft size={15} aria-hidden /> Home</Link>
         </nav>
@@ -161,17 +144,7 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
         </nav>}
 
         <div className="content-studio-main">
-          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} draftKey={draftKey} stage={active} onStage={selectStep}
-            onExample={canLoadBrand ? () => seeExample(stages.length) : undefined} />
-          {canLoadBrand && <>
-            <ReferenceLibrary selected={referenceIndex} onSelect={setReferenceIndex} onOpen={openExampleWorkflow} />
-            {draftKey && <details className="content-studio-pipeline content-studio-runState">
-              <summary>Preview Hostage Talks, 2 A.M.</summary>
-              <p>30-second vertical animation · Narration and captions · Draft for review</p>
-              <video controls playsInline preload="none" width={320} style={{ maxWidth: "100%", display: "block" }}
-                aria-label="Hostage Talks, 2 A.M. animated draft" src="/api/admin/second-spring/video" />
-            </details>}
-          </>}
+          <ProductionBatch canLoadBrand={canLoadBrand} signedIn={signedIn} draftKey={draftKey} stage={active} onStage={selectStep} />
           {!draftKey && <>
           <section className="content-studio-topic" aria-labelledby="topic-heading">
             <div className="content-studio-heroArt" aria-hidden="true"><span /><span /><div><Play size={38} fill="currentColor" /></div></div>
@@ -229,7 +202,6 @@ export function ContentStudio({ canLoadBrand = false, signedIn = false, draftKey
                   <div className="content-studio-tools">
                     <button type="button" onClick={copy}><Copy size={15} aria-hidden /> Copy</button>
                     <button type="button" onClick={download}><Download size={15} aria-hidden /> Export</button>
-                    {canLoadBrand && <button type="button" onClick={() => seeExample(active)}><Play size={15} aria-hidden /> Example</button>}
                     <button type="button" className="content-studio-primary" onClick={() => { stashPrompt(prompt); window.location.assign(APP_HOME); }}><Sparkles size={15} aria-hidden /> Open in agent</button>
                   </div>
                 )}

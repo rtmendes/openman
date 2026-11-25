@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { Clapperboard, CopyPlus, Download, LibraryBig, PanelLeftOpen, Plus, X } from "lucide-react";
+import { Clapperboard, CopyPlus, Download, LibraryBig, PanelLeft, PanelRight, Plus, X } from "lucide-react";
 import { createTask, getSecondSpringContext, getTask, startStudioRun, studioMediaUrl, studioProviderStatus, uploadStudioMedia, type StudioProviderStatus } from "@/lib/agent/client";
 import { studioMediaPerProject, type StudioMedia } from "@/lib/studio/media-types";
 import { matchesStudioSource, type StudioAlternative, type StudioRun } from "@/lib/studio/runs";
@@ -21,9 +21,10 @@ import { storyLabels, storyStyles } from "./story-workflow";
 import type { StoryEdit } from "./story-timeline";
 import { useStudioDrafts } from "./use-studio-drafts";
 import { platforms } from "./workflow";
-import { ShotBoard, VisualProduction } from "./visual-production";
+import { ProductionViewPanel, ShotBoard, VisualProduction } from "./visual-production";
+import { productionViews, type ProductionView } from "./production-views";
 import { BrandAssetLibrary } from "./brand-asset-library";
-import { FolderOptions, ProjectSidebar, type ProjectNavigationEntry, type SidebarBrand } from "./project-sidebar";
+import { FolderOptions, ProjectSidebar, projectSidebarId, type ProjectNavigationEntry, type SidebarBrand } from "./project-sidebar";
 import { useStudioOrganization } from "./use-studio-organization";
 import { studioBatchLimit, studioFolderTrail, studioProjectLimit, studioProjectLocation, studioSecondSpring, studioStages, studioUnassigned,
   type StudioLocation, type StudioProjectOrganization, type StudioStage } from "@/lib/studio/organization";
@@ -76,8 +77,8 @@ function itemPlan(item: Item | undefined) {
   try { return parseVideoPlan(item.script); } catch { /* The original draft can still be edited. */ }
 }
 
-export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, stage, onStage }: {
-  canLoadBrand: boolean; signedIn: boolean; draftKey?: string; onExample?: () => void; stage: number; onStage: (stage: number) => void;
+export function ProductionBatch({ canLoadBrand, signedIn, draftKey, stage, onStage }: {
+  canLoadBrand: boolean; signedIn: boolean; draftKey?: string; stage: number; onStage: (stage: number) => void;
 }) {
   const drafts = useStudioDrafts<Item>(draftKey, storageKey + (canLoadBrand ? ":owner" : ":personal"), blank);
   const workspace = useStudioOrganization(Boolean(draftKey));
@@ -92,12 +93,20 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
   const [version, setVersion] = useState("");
   const [versionPending, setVersionPending] = useState(false);
   const [projectId, setProjectId] = useState("");
+  const [view, setView] = useState<ProductionView>("brief");
   const [selectedShot, setSelectedShot] = useState(0);
   const [activity, setActivity] = useState(0);
   const [savedResearch, setSavedResearch] = useState<{ videoId: string; csv?: string }>();
   const [libraryLocation, setLibraryLocation] = useState<StudioLocation>();
+  const [sidebarWidthPreview, setSidebarWidthPreview] = useState<number>();
+  const [sidebarCollapsedOverride, setSidebarCollapsedOverride] = useState<boolean>();
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
   const previewUrls = useRef(new Map<string, string>());
   const dispatchLock = useRef(false);
+  const sidebar = workspace.data.sidebar;
+  const sidebarCollapsed = sidebarCollapsedOverride ?? sidebar.collapsed;
+  const sidebarWidth = sidebarWidthPreview ?? sidebar.width;
+  const SidebarIcon = sidebar.side === "left" ? PanelLeft : PanelRight;
   const brands: SidebarBrand[] = [
     ...(canLoadBrand ? [{ id: studioSecondSpring, name: connected?.name ?? "Second Spring" }] : []),
     ...workspace.data.brands, { id: studioUnassigned, name: "Unassigned" },
@@ -422,13 +431,34 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
     });
     return true;
   }
-  function download() {
-    const url = URL.createObjectURL(productionZip(productionFiles(approved)));
+
+  async function toggleProjects(collapsed: boolean) {
+    if (workspace.saving || workspace.loading) return;
+    setSidebarCollapsedOverride(collapsed);
+    if (collapsed) sidebarToggle.current?.focus({ preventScroll: true });
+    if (workspace.available && await workspace.save({ ...workspace.data, sidebar: { ...sidebar, collapsed } })) {
+      setSidebarCollapsedOverride(undefined);
+    }
+  }
+
+  async function resizeProjects(width: number) {
+    setSidebarWidthPreview(width);
+    if (width !== sidebar.width) await workspace.save({ ...workspace.data, sidebar: { ...sidebar, width } });
+    setSidebarWidthPreview(undefined);
+  }
+  function download(videos = approved) {
+    const url = URL.createObjectURL(productionZip(productionFiles(videos)));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "video-production-batch.zip";
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function selectView(next: ProductionView) {
+    setView(next);
+    const workflow = productionViews.find((entry) => entry.id === next);
+    if (workflow && "agentStage" in workflow) onStage(workflow.agentStage);
   }
 
   return <section id="video-production" className="content-studio-pipeline production-batch" aria-labelledby="production-heading">
@@ -439,17 +469,18 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       </div>
     </div>
     <div className="production-actions content-studio-runActions">
-      {onExample && <button type="button" onClick={onExample}>Watch batch example</button>}
       <button type="button" disabled={!hydrated || dispatching || items.length >= limit} onClick={() => addVideo(activeItem ? studioProjectLocation(activeItem, workspace.data) : undefined)}><Plus size={15} aria-hidden /> Add video</button>
-      {workspace.data.sidebar.collapsed && <button type="button" onClick={() => void workspace.save({ ...workspace.data,
-        sidebar: { ...workspace.data.sidebar, collapsed: false } })}><PanelLeftOpen size={15} aria-hidden /> Show projects</button>}
-      {draftKey && workspace.available && workspace.data.sidebar.collapsed && <button type="button" onClick={() =>
+      <button type="button" ref={sidebarToggle} aria-controls={projectSidebarId} aria-expanded={!sidebarCollapsed}
+        aria-disabled={workspace.saving || workspace.loading} onClick={() => void toggleProjects(!sidebarCollapsed)}>
+        <SidebarIcon size={15} aria-hidden /> {sidebarCollapsed ? "Show projects" : "Hide projects"}
+      </button>
+      {draftKey && workspace.available && sidebarCollapsed && <button type="button" onClick={() =>
         setLibraryLocation(activeItem ? studioProjectLocation(activeItem, workspace.data) : { brandId: studioUnassigned })}>
         <LibraryBig size={15} aria-hidden /> Brand assets</button>}
       {signedIn ? <button type="button" className="content-studio-runButton" disabled={!ready || dispatching || (Boolean(draftKey) && !drafts.savedRevision)}
         onClick={generateScripts}>{dispatching ? "Starting scripts…" : `Generate ${draftKey ? "batch " : ""}scripts${ready ? ` (${ready})` : ""}`}</button>
         : <Link href="/signin?next=%2Fcontent-studio">Sign in to generate scripts</Link>}
-      {approved.length > 0 && <button type="button" onClick={download}><Download size={15} aria-hidden /> Export approved ({approved.length})</button>}
+      {approved.length > 0 && <button type="button" onClick={() => download()}><Download size={15} aria-hidden /> Export approved ({approved.length})</button>}
     </div>
     {draftKey && <div className="production-sync">
       <p role="status">{({
@@ -474,19 +505,22 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       : brandStatus === "checking" ? "Checking connected brand kits…" : "Could not verify the Second Spring kit. Refresh to retry."}</p>}
     {signedIn && <p className="production-hint">Script generation uses your agent credits.</p>}
     {notice && <p role="alert">{notice}</p>}
+    {sidebarCollapsed && workspace.status && <p role="status">{workspace.status}</p>}
     {libraryLocation && draftKey && workspace.available && <BrandAssetLibrary key={`${libraryLocation.brandId}:${libraryLocation.folderId ?? ""}:${activeId ?? ""}`}
       initial={libraryLocation} brands={brands} folders={workspace.data.folders}
       project={activeItem ? { title: projectTitle(activeItem, items.indexOf(activeItem)), media: activeItem.spec.media ?? [],
         shots: activePlan?.shots.length ?? 0, selectedShot: Math.min(selectedShot, Math.max(0, (activePlan?.shots.length ?? 1) - 1)),
         locked: Boolean(activeItem.pending || dispatching || uploading[activeItem.spec.id]) } : undefined}
       onAttach={attachLibraryAsset} onClose={() => setLibraryLocation(undefined)} />}
-    <div className="studio-project-grid studio-organized-grid" data-dock={workspace.data.sidebar.side} data-collapsed={workspace.data.sidebar.collapsed}
-      style={{ "--studio-navigation-width": `${workspace.data.sidebar.width}px` } as CSSProperties}>
-    {!workspace.data.sidebar.collapsed && <ProjectSidebar organization={workspace.data} brands={brands} available={workspace.available}
+    <div className="studio-project-grid studio-organized-grid" data-dock={sidebar.side} data-collapsed={sidebarCollapsed}
+      style={{ "--studio-navigation-width": `${sidebarWidth}px` } as CSSProperties}>
+    <ProjectSidebar organization={workspace.data} brands={brands} available={workspace.available}
       saving={workspace.saving} status={workspace.status} cloud={Boolean(draftKey)} projects={projects} activeId={activeId}
       onSave={workspace.save} onReload={workspace.reload} onOpen={(id) => {
         setProjectId(id); setSelectedShot(0);
-      }} onNew={addVideo} onAssets={setLibraryLocation} onMove={moveProject} onOrder={orderProject} />}
+      }} onNew={addVideo} onAssets={setLibraryLocation} onMove={moveProject} onOrder={orderProject}
+      sidebarWidth={sidebarWidth} onResize={(width) => void resizeProjects(width)}
+      onHide={() => void toggleProjects(true)} />
     {items.map((item, index) => {
       const { spec } = item;
       const id = spec.id;
@@ -499,8 +533,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
       const position = siblings.findIndex((entry) => entry.id === id);
       const path = [brands.find((brand) => brand.id === location.brandId)?.name, ...studioFolderTrail(location.folderId, workspace.data.folders).map(({ name }) => name)].filter(Boolean);
       return <div className={`studio-project-body${draftKey ? " studio-project-body-agent" : ""}`} key={id}>
-      <VisualProduction canSeeExamples={canLoadBrand} agent={Boolean(draftKey)} hasPlan={Boolean(plan)}
-        hasPreview={Boolean(item.approved || item.renders?.length)} onStage={onStage} />
+      <VisualProduction view={view} onView={selectView} />
       <article className="production-item">
         <div className="production-itemHeading">
           <h3>{projectTitle(item, index)}</h3>
@@ -535,17 +568,10 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             </div>
           </fieldset>
         </details>}
+        <ProductionViewPanel id="brief" active={view}>
         <fieldset disabled={locked} className="production-fields">
           <legend className="production-visually-hidden">Brief for video {index + 1}</legend>
           <label>Keyword or topic<input value={spec.keyword} maxLength={180} onChange={(e) => edit(id, { keyword: e.target.value })} /></label>
-          <TopicResearch videoId={id} keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
-            board={spec.keywordBoard ?? blankKeywordBoard} dataForSeo={Boolean(providers?.dataForSeo)}
-            spec={spec} youtube={savedResearch?.videoId === id ? savedResearch.csv : undefined}
-            onBriefs={(changes, affectsScript) => affectsScript ? edit(id, changes)
-              : patch(id, (row) => ({ ...row, spec: { ...row.spec, ...changes } }))}
-            onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
-            signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
-            onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
           <OfferPlanning value={spec.offer} inventory={savedContentInventory(item, items)} canDispatch={Boolean(draftKey)}
             onChange={(offer) => patch(id, (row) => ({ ...row, spec: { ...row.spec, offer } }))} />
           <label>Brand kit<select value={item.kit} onChange={(e) => {
@@ -592,21 +618,51 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             })}
           </fieldset>
           {item.kit === "custom" && <label className="production-wide">Brand context<textarea rows={2} value={spec.customContext} maxLength={5000} onChange={(e) => edit(id, { customContext: e.target.value })} placeholder="Audience, voice, approved claims and available assets" /></label>}
-          <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
-          <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
         </fieldset>
+        </ProductionViewPanel>
+        <ProductionViewPanel id="research" active={view}>
+          <fieldset className="production-fields" disabled={locked}>
+            <TopicResearch videoId={id} keyword={spec.keyword} language={spec.language} audience={spec.audience || (item.kit === "second-spring" ? connected?.context?.split("\n")[0]?.replace(/^Audience:\s*/, "") ?? "" : "")}
+              board={spec.keywordBoard ?? blankKeywordBoard} dataForSeo={Boolean(providers?.dataForSeo)}
+              spec={spec} youtube={savedResearch?.videoId === id ? savedResearch.csv : undefined}
+              onBriefs={(changes, affectsScript) => affectsScript ? edit(id, changes)
+                : patch(id, (row) => ({ ...row, spec: { ...row.spec, ...changes } }))}
+              onBoard={(update) => patch(id, (row) => ({ ...row, spec: { ...row.spec, keywordBoard: update(row.spec.keywordBoard ?? blankKeywordBoard) } }))}
+              signedIn={signedIn} savedLinks={spec.referenceLinks ?? []}
+              onSave={(url) => edit(id, (current) => ({ referenceLinks: [...new Set([...(current.referenceLinks ?? []), url])].slice(0, 15) }))} />
+          </fieldset>
+        </ProductionViewPanel>
+        <ProductionViewPanel id="narration" active={view}>
+          {view === "narration" && <fieldset className="production-fields" disabled={locked}>
+            <NarrationOptions voice={spec.voice} line={plan?.shots.find((shot) => shot.narration)?.narration} onChange={(voice) => edit(id, { voice })} />
+          </fieldset>}
+        </ProductionViewPanel>
+        <ProductionViewPanel id="shots" active={view}>
+          <fieldset disabled={locked} className="production-fields">
+            <ReferenceInputs spec={spec} cloud={Boolean(draftKey)} onChange={(change) => edit(id, change)} />
+          </fieldset>
+          {draftKey && workspace.available && <div className="content-studio-runActions">
+            <button type="button" onClick={() => setLibraryLocation(location)}>Open brand assets</button>
+          </div>}
+          {plan && <ShotBoard plan={plan} spec={spec} pinned={{ ...item.storyEdit?.images, ...item.shotReferences }}
+            shotIndex={selectedShot} onSelect={setSelectedShot} canSelect={Boolean(draftKey)} locked={Boolean(locked)}
+            onPin={(index, assetId) => patch(id, (row) => ({ ...row, shotReferences: { ...row.shotReferences, [index]: assetId } }))} />}
+          {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
+            onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
+            onRender={async (file) => { await previewFile(item, file); selectView("review"); }} cloud={Boolean(draftKey)} />}
+          {!plan && <div className="content-studio-runActions"><button type="button" onClick={() => selectView("script")}>Open script and shots</button></div>}
+        </ProductionViewPanel>
+        <ProductionViewPanel id="packaging" active={view}>
+          {!draftKey && <p className="production-hint">Save a project to run the titles and covers stage.</p>}
+          <div className="content-studio-runActions"><button type="button" onClick={() => selectView("shots")}>Choose reference images</button></div>
+        </ProductionViewPanel>
+        <ProductionViewPanel id="script" active={view}>
         {canLoadBrand && (providers || spec.subscribrSource || spec.subscribrWriting) && <SubscribrPanel connected={Boolean(providers?.subscribr)} current={spec.subscribrSource}
           writing={spec.subscribrWriting} locked={Boolean(locked)}
           onWriting={(subscribrWriting) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrWriting } }))}
           onImport={(subscribrSource) => patch(id, (row) => ({ ...row, spec: { ...row.spec, subscribrSource } }))} />}
-        {spec.storyStyle && <StoryWorkflowPanel key={id} approved={item.approved} duration={spec.duration} edit={item.storyEdit}
-          onEdit={(storyEdit) => patch(id, (row) => row.approved === item.approved ? { ...row, storyEdit } : row)}
-          onRender={(file) => previewFile(item, file)} cloud={Boolean(draftKey)} />}
         {item.taskId && <Link href={`/app/task/${encodeURIComponent(item.taskId)}`}>Open script task</Link>}
-        {plan && <ShotBoard plan={plan} spec={spec} pinned={{ ...item.storyEdit?.images, ...item.shotReferences }}
-          shotIndex={selectedShot} onSelect={setSelectedShot} canSelect={Boolean(draftKey)} locked={Boolean(locked)}
-          onPin={(index, assetId) => patch(id, (row) => ({ ...row, shotReferences: { ...row.shotReferences, [index]: assetId } }))} />}
-        {plan && <details className="production-shots">
+        {plan && <details className="production-shots" open>
           <summary>{plan.title} · {plan.shots.length} shots</summary>
           <ol>{plan.shots.map((shot, i) => <li key={i} data-selected={i === selectedShot}>
             <strong>{i ? plan.shots[i - 1].end : 0}–{shot.end}s</strong>
@@ -652,6 +708,15 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
         {item.script.trim() && !item.approved && <div className="content-studio-runActions">
           <button type="button" disabled={locked || item.stale || !spec.keyword.trim()} onClick={() => void approve(item)}>Approve script and shots</button>
         </div>}
+        </ProductionViewPanel>
+        <ProductionViewPanel id="review" active={view}>
+        {item.approved && <div className="content-studio-runActions">
+          <button type="button" onClick={() => item.approved && download([item.approved])}>Export this project</button>
+        </div>}
+        {!item.approved && !item.renders?.length && <div className="content-studio-runActions">
+          <button type="button" onClick={() => selectView("script")}>Review the script</button>
+          {spec.storyStyle && <button type="button" onClick={() => selectView("shots")}>Open storyboard</button>}
+        </div>}
         {(item.approved || item.renders?.length) ? <div id="studio-video-preview" className="production-preview">
           {item.approved && <label>{draftKey ? "Save and preview a rendered video" : "Preview a rendered video"}<input type="file" accept="video/mp4,video/webm,.mp4,.webm" disabled={locked} onChange={(e) => {
             const file = e.target.files?.[0];
@@ -670,7 +735,7 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
           </ul>}
           <p>{draftKey ? "Saved renders are private. Review them here before sharing." : "Playback stays on this device."}</p>
           {previews[id] && <a href={previews[id]} download>Download current preview</a>}
-          {previewUrl && <video controls playsInline preload="metadata" src={previewUrl} onLoadedMetadata={(e) => {
+          {previewUrl && view === "review" && <video controls playsInline preload="metadata" src={previewUrl} onLoadedMetadata={(e) => {
             const video = e.currentTarget;
             const aspect = video.videoWidth / video.videoHeight;
             const ratios = chosenFrames(spec);
@@ -681,8 +746,14 @@ export function ProductionBatch({ canLoadBrand, signedIn, draftKey, onExample, s
             if (!matches) patch(id, (row) => ({ ...row, error: `Preview is ${video.duration.toFixed(2)}s at ${video.videoWidth} × ${video.videoHeight}. The brief calls for ${spec.duration}s at ${ratios.join(", ")}.` }));
           }} aria-label={`Private preview of ${item.approved?.plan.title ?? spec.keyword}`} />}
         </div> : null}
+        {canLoadBrand && view === "review" && item.kit === "second-spring" && /thermostat|hostage talks/i.test(spec.keyword) && <details className="production-edit">
+          <summary>Hostage Talks, 2 A.M. · reference cut</summary>
+          <video className="studio-review-reference" controls playsInline preload="none" src="/api/admin/second-spring/video"
+            aria-label="Hostage Talks, 2 A.M. reference cut" />
+        </details>}
+        </ProductionViewPanel>
       </article>
-      {draftKey && <ProjectAgent spec={spec} kit={item.kit} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
+      {draftKey && <ProjectAgent view={view} spec={spec} kit={item.kit} script={item.script} plan={plan} shot={selectedShot} onShot={setSelectedShot}
         revision={drafts.savedRevision} stage={stage} onStage={onStage} activity={activity} canStart={Boolean(spec.keyword.trim()) && !locked && (item.kit !== "second-spring" || brandStatus === "ready")}
         canCopy={items.length < limit} onSavedResearch={setSavedResearch} onPlan={(run, copy) => loadRunPlan(item, run, copy)}
         onCampaign={openCampaign} onSuggestion={(run, option, copy) => applySuggestion(item, run, option, copy)} />}
