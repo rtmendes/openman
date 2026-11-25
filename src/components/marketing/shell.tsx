@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Organic Intelligence, Inc.
-/** Frame for every marketing page: sticky header, promo banner, page content, footer and the sign-in modal. */
+/** Shared marketing header, page content, footer and sign-in modal. */
 import { Suspense, type ReactNode } from "react";
 import { libreBaskerville } from "./fonts";
 import { InertLinkToasts } from "./inert-links";
@@ -19,7 +19,7 @@ export function MarketingShell({ variant = "site", children }: { variant?: Heade
       {/* The first screen fills at least the viewport, so the footer always starts below the fold. */}
       <div className="flex min-h-dvh w-full shrink-0 flex-col">
         <SiteHeader variant={variant} />
-        <PromoBanner />
+        {variant !== "landing" && <PromoBanner />}
         {children}
       </div>
       <SiteFooter />
