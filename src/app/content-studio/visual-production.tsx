@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ClipboardList } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { StudioMedia } from "@/lib/studio/media-types";
 import { AssetPreview, AssetThumbnail, attachmentAsset } from "./asset-preview";
@@ -27,7 +28,8 @@ export function VisualProduction({ view, onView }: {
           onView(nextView);
           document.getElementById(`studio-tab-${nextView}`)?.focus();
         }}>
-        <Image src={`/studio/workflow/${image}.webp`} alt="" width={412} height={412} unoptimized />
+        {id === "brief" ? <ClipboardList className="studio-brief-tab-icon" size={24} aria-hidden />
+          : <Image src={`/studio/workflow/${image}.webp`} alt="" width={412} height={412} unoptimized />}
         <span>{title}</span>
       </button>)}
     </div>
